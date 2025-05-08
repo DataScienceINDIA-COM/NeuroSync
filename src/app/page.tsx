@@ -12,8 +12,10 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
 import TaskService from "@/components/task/TaskService";
 import type { Task } from "@/types/task";
@@ -28,7 +30,10 @@ import type { User } from "@/types/user";
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Sparkles } from "lucide-react";
+import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Wand2, ImagePlus, Loader2 } from "lucide-react";
+import { generateAvatar } from "@/ai/flows/generate-avatar-flow";
+import { useToast } from "@/hooks/use-toast";
+
 
 const LOCAL_STORAGE_KEY_MOOD = "vibeCheckLogs";
 const LOCAL_STORAGE_KEY_TASKS = "vibeCheckTasks";
@@ -40,6 +45,7 @@ const LOCAL_STORAGE_KEY_NEUROPOINTS = "vibeCheckNeuroPoints";
 export default function HomePage() {
   const [moodLogs, setMoodLogs] = useState<MoodLog[]>([]);
   const [isClient, setIsClient] = useState(false);
+  const { toast } = useToast();
   
   const [user, setUser] = useState<User>(() => {
     if (typeof window !== 'undefined') {
@@ -48,7 +54,7 @@ export default function HomePage() {
     }
     return {
       id: generateId(),
-      name: "Vibe Lord", // GenZ vibe
+      name: "Vibe Lord", 
       completedTasks: [],
       claimedRewards: [],
       inProgressTasks: [],
@@ -56,7 +62,7 @@ export default function HomePage() {
       avatar: {
         id: generateId(),
         name: "Avatar",
-        description: "User's Avatar",
+        description: "User's Default Avatar",
         imageUrl: `https://picsum.photos/seed/${generateId()}/100/100`,
       },
       streak: 0,
@@ -104,6 +110,10 @@ export default function HomePage() {
     ];
   });
 
+  // AI Avatar Generation State
+  const [avatarDescription, setAvatarDescription] = useState<string>("");
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
+
   useEffect(() => {
     setIsClient(true);
     const storedMoodLogs = localStorage.getItem(LOCAL_STORAGE_KEY_MOOD);
@@ -142,13 +152,13 @@ export default function HomePage() {
       const newTasks = defaultTasks.map(taskData => taskService.createTask(taskData));
       setTasks(newTasks);
     }
-  }, [isClient, taskService]); // tasks.length removed
+  }, [isClient, taskService]);
 
   useEffect(() => {
     if (isClient) {
       setUser(prevUser => ({ ...prevUser, hormoneLevels: predictHormone(prevUser) }));
     }
-  }, [tasks, isClient]); // Removed user.name dependency, predictHormone depends on completed tasks from user obj
+  }, [tasks, isClient]);
 
   const handleLogMood = (newLog: MoodLog) => {
     setMoodLogs((prevLogs) =>
@@ -185,10 +195,60 @@ export default function HomePage() {
     }
   };
 
+  const handleGenerateAvatar = async () => {
+    if (avatarDescription.trim().length < 10) {
+      toast({
+        title: "Yo, Hold Up! 🧐",
+        description: "Your avatar prompt needs a bit more spice! At least 10 chars, fam.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (avatarDescription.trim().length > 200) {
+      toast({
+        title: "Easy There, Shakespeare! 😅",
+        description: "Keep that prompt under 200 chars. Short 'n sweet!",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingAvatar(true);
+    try {
+      const result = await generateAvatar({ description: avatarDescription });
+      setUser(prevUser => ({
+        ...prevUser,
+        avatar: {
+          ...prevUser.avatar,
+          imageUrl: result.imageUrl,
+          description: `AI-generated: ${avatarDescription}`, 
+        }
+      }));
+      toast({
+        title: "Avatar Leveled Up! ✨🚀",
+        description: "Your new AI-generated vibe is live! Looking fresh!",
+      });
+      setAvatarDescription(""); 
+    } catch (error: any) {
+      console.error("Avatar generation failed:", error);
+      toast({
+        title: "AI Brain Fart! 🧠💨",
+        description: error.message || "Couldn't generate your avatar. Try a different prompt or give it a sec!",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingAvatar(false);
+    }
+  };
+
   const existingDates = moodLogs.map((log) => log.date);
 
   if (!isClient) {
-    return <div className="flex justify-center items-center min-h-screen"><Sparkles className="h-12 w-12 animate-pulse text-accent"/></div>;
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
+        <p className="text-lg animate-pulse text-accent font-semibold">Loading your epic vibes... ✨</p>
+      </div>
+    );
   }
 
   return (
@@ -199,8 +259,8 @@ export default function HomePage() {
           <section className="lg:col-span-1 space-y-6">
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>My Glow Up</CardTitle> {/* GenZ vibe */}
-                <Button variant="ghost" size="icon" onClick={() => alert("Profile edit finna drop!")}><Edit3 className="h-4 w-4"/></Button> {/* GenZ vibe */}
+                <CardTitle>My Glow Up</CardTitle> 
+                <Button variant="ghost" size="icon" onClick={() => alert("Profile edit finna drop!")}><Edit3 className="h-4 w-4"/></Button> 
               </CardHeader>
               <CardContent className="flex flex-col items-center space-y-3">
                 <AvatarDisplay avatar={user.avatar} size={100}/>
@@ -213,8 +273,42 @@ export default function HomePage() {
 
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle>Daily Vibe Check</CardTitle> {/* GenZ vibe */}
-                <CardDescription>What's the tea? Spill it.</CardDescription> {/* GenZ vibe */}
+                <CardTitle className="flex items-center gap-2">
+                  <ImagePlus className="h-6 w-6 text-primary" />
+                  AI Avatar Studio ✨
+                </CardTitle>
+                <CardDescription>
+                  Craft a unique avatar with AI! Describe your vision below. Keep it cool, keep it clean. 😉
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea
+                  placeholder="e.g., 'a neon-lit cyberpunk fox with headphones', 'a serene cosmic jellyfish floating in a nebula', 'a retro pixel art robot chilling on a cloud'"
+                  value={avatarDescription}
+                  onChange={(e) => setAvatarDescription(e.target.value)}
+                  maxLength={200}
+                  className="min-h-[100px] focus:bg-background"
+                  disabled={isGeneratingAvatar}
+                />
+                <Button
+                  onClick={handleGenerateAvatar}
+                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200}
+                  className="w-full"
+                >
+                  {isGeneratingAvatar ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="mr-2 h-4 w-4" />
+                  )}
+                  {isGeneratingAvatar ? "AI Makin' Magic..." : "Generate My Vibe!"}
+                </Button>
+              </CardContent>
+            </Card>
+            
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle>Daily Vibe Check</CardTitle> 
+                <CardDescription>What's the tea? Spill it.</CardDescription> 
               </CardHeader>
               <CardContent>
                 <MoodLogForm onLogMood={handleLogMood} existingDates={existingDates} />
@@ -230,7 +324,7 @@ export default function HomePage() {
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5 text-primary"/>Brain Juice Levels</CardTitle>
-                <CardDescription>Peep what your brain's cookin' up, bestie.</CardDescription> {/* GenZ vibe */}
+                <CardDescription>Peep what your brain's cookin' up, bestie.</CardDescription> 
               </CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div><Info className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{user.hormoneLevels.dopamine}%</span></div>
@@ -243,7 +337,7 @@ export default function HomePage() {
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary"/>Today's Quests</CardTitle>
-                 <CardDescription>Small W's = Big Vibe Energy. Get those VibePoints!</CardDescription> {/* GenZ vibe */}
+                 <CardDescription>Small W's = Big Vibe Energy. Get those VibePoints!</CardDescription> 
               </CardHeader>
               <CardContent>
                 {tasks.length > 0 ? (
@@ -251,7 +345,7 @@ export default function HomePage() {
                   {tasks.map((task) => (
                     <div key={task.id} className={`p-4 border rounded-xl flex justify-between items-center transition-all ${task.isCompleted ? "bg-muted opacity-60 shadow-inner" : "bg-card hover:shadow-md"}`}>
                       <div>
-                        <h4 className={`font-medium ${task.isCompleted ? "line-through text-muted-foreground" : "text-primary-foreground"}`}>{task.name}</h4>
+                        <h4 className={`font-medium ${task.isCompleted ? "line-through text-muted-foreground" : "text-card-foreground"}`}>{task.name}</h4>
                         <p className="text-xs text-muted-foreground">{task.description}</p>
                         <p className="text-xs mt-1">
                           Reward: <span className="font-semibold text-accent">{task.rewardPoints} VP</span>
@@ -260,14 +354,14 @@ export default function HomePage() {
                       </div>
                       {!task.isCompleted && (
                         <Button onClick={() => handleTaskCompletion(task.id)} size="sm" variant="default">
-                          GG! {/* GenZ vibe */}
+                          GG! 
                         </Button>
                       )}
                     </div>
                   ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-6">No quests today, fam. Add some to pop off!</p> /* GenZ vibe */
+                  <p className="text-muted-foreground text-center py-6">No quests today, fam. Add some to pop off!</p> 
                 )}
               </CardContent>
             </Card>
@@ -275,7 +369,7 @@ export default function HomePage() {
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle>Vibe Archive</CardTitle>
-                <CardDescription>Your mood history? It's giving ✨receipts✨.</CardDescription> {/* GenZ vibe */}
+                <CardDescription>Your mood history? It's giving ✨receipts✨.</CardDescription> 
               </CardHeader>
               <CardContent>
                 {moodLogs.length > 0 ? (
@@ -305,7 +399,7 @@ export default function HomePage() {
                   </ScrollArea>
                 ) : (
                   <p className="text-muted-foreground text-center py-10">
-                    No vibes logged yet, bruh. Start tracking to see your archive! {/* GenZ vibe */}
+                    No vibes logged yet, bruh. Start tracking to see your archive! 
                   </p>
                 )}
               </CardContent>
@@ -324,9 +418,7 @@ export default function HomePage() {
         </section>
       </main>
       <footer className="text-center p-6 border-t border-border/50 text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} Vibe Check. Keep it 💯. ✌️</p> {/* GenZ vibe */}
+        <p>&copy; {new Date().getFullYear()} Vibe Check. Keep it 💯. ✌️</p> 
       </footer>
     </div>
   );
-}
-
