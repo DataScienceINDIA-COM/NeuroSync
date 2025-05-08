@@ -29,11 +29,13 @@ import type { User } from "@/types/user";
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Wand2, ImagePlus, Loader2, Sparkles } from "lucide-react";
+import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Wand2, ImagePlus, Loader2, Sparkles, Bell } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow";
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider, useUser } from "@/contexts/UserContext";
 import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
+import { requestNotificationPermission, onMessageListener } from '@/lib/firebase-messaging';
+import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 
 
 const LOCAL_STORAGE_KEY_TASKS = "vibeCheckTasks";
@@ -50,7 +52,6 @@ function HomePageContent() {
   
   const taskService = useMemo(() => {
     if (!isClient || !user) return null; 
-    // Pass user with current moodLogs for task suggestions
     const userWithMoodLogs = { ...user, moodLogs: moodLogs || [] };
     return new TaskService(userWithMoodLogs);
   }, [user, moodLogs, isClient]);
@@ -114,10 +115,43 @@ function HomePageContent() {
 
   const [avatarDescription, setAvatarDescription] = useState<string>("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
+    if ('Notification' in window && user && setUser) {
+      requestNotificationPermission().then(async token => {
+        if (token) {
+          console.log("FCM Token:", token);
+          const result = await storeUserFCMToken(user.id, token);
+          if (result.success) {
+            setUser(prevUser => prevUser ? ({ ...prevUser, fcmToken: token }) : null);
+            toast({ title: "Notifications Enabled! 🔔", description: "You'll get cool updates now. Low-key excited!" });
+          } else {
+             toast({ title: "Uh Oh! 😥", description: `Failed to save notification settings: ${result.message}. Try again later, fam.`, variant: "destructive"});
+          }
+        } else {
+          console.log("Permission not granted for notifications or no token received.");
+           toast({ title: "No Stress! 😎", description: "Notifications are off. You can change this in browser settings anytime, no cap.", variant: "default"});
+        }
+      });
+
+      // Listen for foreground messages
+      const unsubscribe = onMessageListener().then(payload => {
+        console.log('Received foreground message: ', payload);
+        toast({
+          title: payload.notification?.title || "New Vibe!",
+          description: payload.notification?.body || "Something cool happened!",
+        });
+      }).catch(err => console.error('Failed to listen for foreground messages: ', err));
+      
+      // Cleanup listener on unmount
+      return () => {
+        unsubscribe.then(fn => fn()).catch(err => console.error('Error unsubscribing from FCM: ', err));
+      };
+    }
+  }, [isClient, user, setUser, toast]);
+
 
   useEffect(() => {
     if (isClient) {
@@ -130,26 +164,25 @@ function HomePageContent() {
   useEffect(() => {
     if (isClient && tasks.length === 0 && taskService && user) {
       const initializeTasks = async () => {
-        const defaultTaskData: Omit<Task, 'id' | 'isCompleted' | 'rewardPoints'>[] = [
-          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", hasNeuroBoost: true },
-          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", hasNeuroBoost: false },
-          { name: "Read for 20", description: "Expand the mind grapes. Big brain energy.", hasNeuroBoost: false },
-          { name: "Catch 8hrs Zzz's", description: "Good sleep is a W. Bet.", hasNeuroBoost: false },
-          { name: "Journal Dump (10m)", description: "Spill the tea in your journal. Period.", hasNeuroBoost: true },
+        const defaultTaskData: Omit<Task, 'id' | 'isCompleted'>[] = [
+          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true },
+          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false },
+          { name: "Read for 20", description: "Expand the mind grapes. Big brain energy.", rewardPoints: 15, hasNeuroBoost: false },
+          { name: "Catch 8hrs Zzz's", description: "Good sleep is a W. Bet.", rewardPoints: 20, hasNeuroBoost: false },
+          { name: "Journal Dump (10m)", description: "Spill the tea in your journal. Period.", rewardPoints: 10, hasNeuroBoost: true },
         ];
         
-        const newTasksPromises = defaultTaskData.map(async (taskData) => {
-          if(!taskService || !user) return null; // Should not happen if taskService is defined
-          const currentUserMood = moodLogs?.[0]?.mood || "Neutral"; // Get latest mood or default
+        const newTasks = await Promise.all(defaultTaskData.map(async (taskData) => {
+          if(!taskService || !user) return null; 
+          const currentUserMood = moodLogs?.[0]?.mood || "Neutral"; 
           const rewardPoints = await taskService.calculateRewardPointsForTask(taskData.description, currentUserMood, user.hormoneLevels);
           return taskService.createTask({...taskData, rewardPoints});
-        });
-        const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as Task[];
-        setTasks(newTasks);
+        }));
+        setTasks(newTasks.filter(Boolean) as Task[]);
       };
       initializeTasks();
     }
-  }, [isClient, taskService, user, moodLogs]); // Added user and moodLogs
+  }, [isClient, taskService, user, moodLogs]); 
 
 
   const handleTaskCompletion = (taskId: string) => {
@@ -169,6 +202,21 @@ function HomePageContent() {
           streak: taskService.user.streak 
         }
       });
+
+      // Send notification on task completion
+      if (user.fcmToken) {
+        sendNotificationToUser(user.id, {
+          title: "Quest Smashed! 🚀",
+          body: `You just crushed '${updatedTask.name}'! Keep that W energy!`,
+          data: { taskId: updatedTask.id }
+        }).then(response => {
+          if (response.success) {
+            console.log("Task completion notification sent!");
+          } else {
+            console.error("Failed to send task completion notification:", response.message);
+          }
+        });
+      }
     }
   };
   
@@ -215,7 +263,7 @@ function HomePageContent() {
         return {
           ...prevUser,
           avatar: {
-            ...(prevUser.avatar || { id: generateId(), name: 'New Avatar', description: '', imageUrl: '' }), // Ensure avatar object exists
+            ...(prevUser.avatar || { id: generateId(), name: 'New Avatar', description: '', imageUrl: '' }), 
             imageUrl: result.imageUrl,
             description: `AI-generated: ${avatarDescription}`, 
           }
@@ -242,8 +290,8 @@ function HomePageContent() {
 
   useEffect(() => {
      const fetchTaskSuggestions = async () => {
-      if (isClient && taskService && user && moodLogs && moodLogs.length > 0) { // Ensure moodLogs are available
-        const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs); // Pass moodLogs
+      if (isClient && taskService && user && moodLogs && moodLogs.length > 0) { 
+        const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs); 
         if (suggestedTaskDetails) {
           const newTasksPromises = suggestedTaskDetails.map(async (taskDetail) => {
             if(!taskService || !user) return null;
@@ -266,11 +314,33 @@ function HomePageContent() {
       }
     };
     
-    // Fetch suggestions if tasks are few AND mood has been logged (ensuring context for suggestions)
     if (tasks.length <= 5 && moodLogs && moodLogs.length > 0) { 
        fetchTaskSuggestions();
     }
-  }, [isClient, taskService, user, moodLogs, tasks.length]); // Add user and moodLogs to dependency array
+  }, [isClient, taskService, user, moodLogs, tasks.length]); 
+
+  const handleSendTestNotification = async () => {
+    if (!user || !user.fcmToken) {
+      toast({
+        title: "Can't Send Push! 🚧",
+        description: "Enable notifications or check your settings, bestie.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSendingNotification(true);
+    const result = await sendNotificationToUser(user.id, {
+      title: "Vibe Check Test! 🧪",
+      body: `Yo ${user.name}, this is a test notification! It's giving... works! 🎉`,
+      data: { test: "true" }
+    });
+    setIsSendingNotification(false);
+    if (result.success) {
+      toast({ title: "Test Notification Sent! 📬", description: "Check your device, it should pop off!" });
+    } else {
+      toast({ title: "Push Fail! 😭", description: `Couldn't send test notification: ${result.message}`, variant: "destructive" });
+    }
+  };
 
   if (!isClient || !user) { 
     return (
@@ -298,6 +368,12 @@ function HomePageContent() {
                 <p className="text-sm text-muted-foreground">Streak: {user.streak} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
                  <p className="text-lg font-bold text-accent">VibePoints: {neuroPoints} VP</p>
                 {nudge && <p className="text-xs text-center p-3 bg-accent/10 rounded-lg text-accent-foreground shadow-sm">{nudge}</p>}
+                {user.fcmToken && (
+                  <Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="mt-2">
+                    {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
+                    {isSendingNotification ? "Sending..." : "Test Push"}
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -463,3 +539,5 @@ export default function Page() {
     </UserProvider>
   );
 }
+
+    

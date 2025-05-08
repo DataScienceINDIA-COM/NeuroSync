@@ -2,6 +2,7 @@
 
 import { adminMessaging, adminDb } from '@/lib/firebase-admin';
 import type { User } from '@/types/user';
+import admin from 'firebase-admin'; // Ensure admin is imported if FieldValue is used directly
 
 interface NotificationPayload {
   title: string;
@@ -11,8 +12,6 @@ interface NotificationPayload {
 
 export async function sendNotificationToUser(userId: string, payload: NotificationPayload) {
   try {
-    // In a real app, you would fetch the user's document from Firestore to get their FCM token
-    // For now, let's assume we can find a user and they have an fcmToken field.
     const userDoc = await adminDb.collection('users').doc(userId).get();
 
     if (!userDoc.exists) {
@@ -21,7 +20,7 @@ export async function sendNotificationToUser(userId: string, payload: Notificati
     }
 
     const userData = userDoc.data() as User;
-    const token = userData.fcmToken; // Assuming fcmToken is stored on the user document
+    const token = userData.fcmToken; 
 
     if (!token) {
       console.error(`FCM token not found for user ${userId}.`);
@@ -46,7 +45,6 @@ export async function sendNotificationToUser(userId: string, payload: Notificati
   }
 }
 
-// Example function to store FCM token (you'll call this from the client)
 export async function storeUserFCMToken(userId: string, token: string): Promise<{success: boolean, message?: string}> {
   if (!userId || !token) {
     return { success: false, message: 'User ID and token are required.' };
@@ -54,7 +52,7 @@ export async function storeUserFCMToken(userId: string, token: string): Promise<
   try {
     await adminDb.collection('users').doc(userId).set({
       fcmToken: token,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(), // Correctly reference admin for FieldValue
     }, { merge: true });
     console.log(`FCM token stored for user ${userId}`);
     return { success: true };
@@ -63,3 +61,5 @@ export async function storeUserFCMToken(userId: string, token: string): Promise<
     return { success: false, message: 'Failed to store FCM token.' };
   }
 }
+
+    
