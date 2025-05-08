@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Generates community challenges based on recent mood data.
