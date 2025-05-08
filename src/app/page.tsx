@@ -19,7 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
 import TaskService from "@/components/task/TaskService";
 import type { Task } from "@/types/task";
-import { getRandomHormone, predictHormone } from "@/ai/hormone-prediction";
 import type { Hormone } from "@/types/hormone";
 import type { Reward } from "@/types/reward";
 import RewardDisplay from "@/components/rewards/RewardDisplay";
@@ -30,62 +29,52 @@ import type { User } from "@/types/user";
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Wand2, ImagePlus, Loader2 } from "lucide-react";
+import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Wand2, ImagePlus, Loader2, Sparkles } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow";
 import { useToast } from "@/hooks/use-toast";
+import { UserProvider, useUser } from "@/contexts/UserContext";
+import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
 
 
-const LOCAL_STORAGE_KEY_MOOD = "vibeCheckLogs";
 const LOCAL_STORAGE_KEY_TASKS = "vibeCheckTasks";
-const LOCAL_STORAGE_KEY_USER = "vibeCheckUser";
 const LOCAL_STORAGE_KEY_REWARDS = "vibeCheckRewards";
 const LOCAL_STORAGE_KEY_NEUROPOINTS = "vibeCheckNeuroPoints";
 
 
-export default function HomePage() {
-  const [moodLogs, setMoodLogs] = useState<MoodLog[]>([]);
+function HomePageContent() {
+  const { moodLogs, handleLogMood: contextHandleLogMood, setMoodLogs: contextSetMoodLogs } = useMoodLogs();
+  const { user, setUser } = useUser(); 
+
   const [isClient, setIsClient] = useState(false);
   const { toast } = useToast();
   
-  const [user, setUser] = useState<User>(() => {
-    if (typeof window !== 'undefined') {
-      const storedUser = localStorage.getItem(LOCAL_STORAGE_KEY_USER);
-      if (storedUser) return JSON.parse(storedUser);
-    }
-    return {
-      id: generateId(),
-      name: "Vibe Lord", 
-      completedTasks: [],
-      claimedRewards: [],
-      inProgressTasks: [],
-      hormoneLevels: getRandomHormone(),
-      avatar: {
-        id: generateId(),
-        name: "Avatar",
-        description: "User's Default Avatar",
-        imageUrl: `https://picsum.photos/seed/${generateId()}/100/100`,
-      },
-      streak: 0,
-    };
-  });
-
   const taskService = useMemo(() => {
-    if (!isClient) return null;
-    return new TaskService(user);
-  }, [user, isClient]);
+    if (!isClient || !user) return null; 
+    // Pass user with current moodLogs for task suggestions
+    const userWithMoodLogs = { ...user, moodLogs: moodLogs || [] };
+    return new TaskService(userWithMoodLogs);
+  }, [user, moodLogs, isClient]);
 
   const [tasks, setTasks] = useState<Task[]>(() => {
      if (typeof window !== 'undefined') {
       const storedTasks = localStorage.getItem(LOCAL_STORAGE_KEY_TASKS);
-      if (storedTasks) return JSON.parse(storedTasks);
+      if (storedTasks) {
+        try {
+          return JSON.parse(storedTasks);
+        } catch (e) {
+          console.error("Failed to parse tasks from localStorage", e);
+          return [];
+        }
+      }
     }
     return [];
   });
 
   const incompleteTasks = useMemo(() => tasks.filter(t => !t.isCompleted), [tasks]);
   const randomIncompleteTask = useClientSideRandom(incompleteTasks);
+  
   const nudge = useMemo(() => {
-    if (!isClient) return "Loading...";
+    if (!isClient || !user) return "Loading...";
     return getAICoachNudge(user, randomIncompleteTask ?? null);
   }, [user, randomIncompleteTask, isClient]);
 
@@ -93,7 +82,14 @@ export default function HomePage() {
   const [neuroPoints, setNeuroPoints] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const storedPoints = localStorage.getItem(LOCAL_STORAGE_KEY_NEUROPOINTS);
-      if (storedPoints) return JSON.parse(storedPoints);
+      if (storedPoints) {
+        try {
+          return JSON.parse(storedPoints);
+        } catch (e) {
+          console.error("Failed to parse neuro points from localStorage", e);
+          return 0;
+        }
+      }
     }
     return 0;
   });
@@ -101,7 +97,13 @@ export default function HomePage() {
   const [rewards, setRewards] = useState<Reward[]>(() => {
     if (typeof window !== 'undefined') {
       const storedRewards = localStorage.getItem(LOCAL_STORAGE_KEY_REWARDS);
-      if (storedRewards) return JSON.parse(storedRewards);
+      if (storedRewards) {
+        try {
+          return JSON.parse(storedRewards);
+        } catch (e) {
+          console.error("Failed to parse rewards from localStorage", e);
+        }
+      }
     }
     return [
       { id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
@@ -110,64 +112,48 @@ export default function HomePage() {
     ];
   });
 
-  // AI Avatar Generation State
   const [avatarDescription, setAvatarDescription] = useState<string>("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
 
   useEffect(() => {
     setIsClient(true);
-    const storedMoodLogs = localStorage.getItem(LOCAL_STORAGE_KEY_MOOD);
-    if (storedMoodLogs) {
-      try {
-        const parsedLogs = JSON.parse(storedMoodLogs) as MoodLog[];
-        setMoodLogs(
-          parsedLogs.sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
-        );
-      } catch (error) {
-        console.error("Failed to parse mood logs from localStorage", error);
-        localStorage.removeItem(LOCAL_STORAGE_KEY_MOOD);
-      }
-    }
   }, []);
 
   useEffect(() => {
     if (isClient) {
-      localStorage.setItem(LOCAL_STORAGE_KEY_MOOD, JSON.stringify(moodLogs));
       localStorage.setItem(LOCAL_STORAGE_KEY_TASKS, JSON.stringify(tasks));
-      localStorage.setItem(LOCAL_STORAGE_KEY_USER, JSON.stringify(user));
       localStorage.setItem(LOCAL_STORAGE_KEY_REWARDS, JSON.stringify(rewards));
       localStorage.setItem(LOCAL_STORAGE_KEY_NEUROPOINTS, JSON.stringify(neuroPoints));
     }
-  }, [moodLogs, tasks, user, rewards, neuroPoints, isClient]);
+  }, [tasks, rewards, neuroPoints, isClient]);
 
   useEffect(() => {
-    if (isClient && tasks.length === 0 && taskService) {
-      const defaultTasks: Omit<Task, "id" | "isCompleted">[] = [
-        { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true},
-        { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false},
-        { name: "Read for 20", description: "Expand the mind grapes. Big brain energy.", rewardPoints: 15, hasNeuroBoost: false},
-        { name: "Catch 8hrs Zzz's", description: "Good sleep is a W. Bet.", rewardPoints: 20, hasNeuroBoost: false},
-        { name: "Journal Dump (10m)", description: "Spill the tea in your journal. Period.", rewardPoints: 10, hasNeuroBoost: true},
-      ];
-      const newTasks = defaultTasks.map(taskData => taskService.createTask(taskData));
-      setTasks(newTasks);
+    if (isClient && tasks.length === 0 && taskService && user) {
+      const initializeTasks = async () => {
+        const defaultTaskData: Omit<Task, 'id' | 'isCompleted' | 'rewardPoints'>[] = [
+          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", hasNeuroBoost: true },
+          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", hasNeuroBoost: false },
+          { name: "Read for 20", description: "Expand the mind grapes. Big brain energy.", hasNeuroBoost: false },
+          { name: "Catch 8hrs Zzz's", description: "Good sleep is a W. Bet.", hasNeuroBoost: false },
+          { name: "Journal Dump (10m)", description: "Spill the tea in your journal. Period.", hasNeuroBoost: true },
+        ];
+        
+        const newTasksPromises = defaultTaskData.map(async (taskData) => {
+          if(!taskService || !user) return null; // Should not happen if taskService is defined
+          const currentUserMood = moodLogs?.[0]?.mood || "Neutral"; // Get latest mood or default
+          const rewardPoints = await taskService.calculateRewardPointsForTask(taskData.description, currentUserMood, user.hormoneLevels);
+          return taskService.createTask({...taskData, rewardPoints});
+        });
+        const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as Task[];
+        setTasks(newTasks);
+      };
+      initializeTasks();
     }
-  }, [isClient, taskService]);
+  }, [isClient, taskService, user, moodLogs]); // Added user and moodLogs
 
-  useEffect(() => {
-    if (isClient) {
-      setUser(prevUser => ({ ...prevUser, hormoneLevels: predictHormone(prevUser) }));
-    }
-  }, [tasks, isClient]);
 
-  const handleLogMood = (newLog: MoodLog) => {
-    setMoodLogs((prevLogs) =>
-      [newLog, ...prevLogs].sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
-    );
-  };
-  
   const handleTaskCompletion = (taskId: string) => {
-    if (!taskService) return;
+    if (!taskService || !user || !setUser) return; 
     const taskToComplete = tasks.find(t => t.id === taskId);
     if (!taskToComplete || taskToComplete.isCompleted) return;
 
@@ -175,27 +161,35 @@ export default function HomePage() {
     if (updatedTask) {
       setTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
       setNeuroPoints(prevPoints => prevPoints + (updatedTask.rewardPoints * (updatedTask.hasNeuroBoost ? 10 : 1)));
-      setUser(prevUser => ({
-        ...prevUser,
-        completedTasks: [...prevUser.completedTasks, updatedTask],
-        streak: taskService.user.streak 
-      }));
+      setUser(prevUser => {
+        if (!prevUser) return null;
+        return {
+          ...prevUser,
+          completedTasks: [...prevUser.completedTasks, updatedTask],
+          streak: taskService.user.streak 
+        }
+      });
     }
   };
   
   const handleClaimReward = (rewardId: string) => {
+    if (!user || !setUser) return;
     const rewardToClaim = rewards.find(r => r.id === rewardId);
     if (rewardToClaim && !rewardToClaim.isUnlocked && neuroPoints >= rewardToClaim.pointsRequired) {
       setNeuroPoints(prev => prev - rewardToClaim.pointsRequired);
       setRewards(prevRewards => prevRewards.map(r => r.id === rewardId ? {...r, isUnlocked: true} : r));
-      setUser(prevUser => ({
-        ...prevUser,
-        claimedRewards: [...prevUser.claimedRewards, {...rewardToClaim, isUnlocked: true}]
-      }));
+      setUser(prevUser => {
+        if (!prevUser) return null;
+        return {
+          ...prevUser,
+          claimedRewards: [...prevUser.claimedRewards, {...rewardToClaim, isUnlocked: true}]
+        }
+      });
     }
   };
 
   const handleGenerateAvatar = async () => {
+    if (!user || !setUser) return;
     if (avatarDescription.trim().length < 10) {
       toast({
         title: "Yo, Hold Up! 🧐",
@@ -216,14 +210,17 @@ export default function HomePage() {
     setIsGeneratingAvatar(true);
     try {
       const result = await generateAvatar({ description: avatarDescription });
-      setUser(prevUser => ({
-        ...prevUser,
-        avatar: {
-          ...prevUser.avatar,
-          imageUrl: result.imageUrl,
-          description: `AI-generated: ${avatarDescription}`, 
+      setUser(prevUser => {
+        if(!prevUser) return null;
+        return {
+          ...prevUser,
+          avatar: {
+            ...(prevUser.avatar || { id: generateId(), name: 'New Avatar', description: '', imageUrl: '' }), // Ensure avatar object exists
+            imageUrl: result.imageUrl,
+            description: `AI-generated: ${avatarDescription}`, 
+          }
         }
-      }));
+      });
       toast({
         title: "Avatar Leveled Up! ✨🚀",
         description: "Your new AI-generated vibe is live! Looking fresh!",
@@ -243,10 +240,43 @@ export default function HomePage() {
 
   const existingDates = moodLogs.map((log) => log.date);
 
-  if (!isClient) {
+  useEffect(() => {
+     const fetchTaskSuggestions = async () => {
+      if (isClient && taskService && user && moodLogs && moodLogs.length > 0) { // Ensure moodLogs are available
+        const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs); // Pass moodLogs
+        if (suggestedTaskDetails) {
+          const newTasksPromises = suggestedTaskDetails.map(async (taskDetail) => {
+            if(!taskService || !user) return null;
+            const currentUserMood = moodLogs?.[0]?.mood || "Neutral";
+            const rewardPoints = await taskService.calculateRewardPointsForTask(taskDetail.description, currentUserMood, user.hormoneLevels);
+            return taskService.createTask({ 
+              name: taskDetail.name,
+              description: taskDetail.description,
+              hasNeuroBoost: taskDetail.hasNeuroBoost,
+              rewardPoints: rewardPoints,
+            });
+          });
+          const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as Task[];
+          setTasks(prevTasks => {
+            const existingTaskNames = new Set(prevTasks.map(t => t.name));
+            const uniqueNewTasks = newTasks.filter(nt => !existingTaskNames.has(nt.name));
+            return [...prevTasks, ...uniqueNewTasks];
+          });
+        }
+      }
+    };
+    
+    // Fetch suggestions if tasks are few AND mood has been logged (ensuring context for suggestions)
+    if (tasks.length <= 5 && moodLogs && moodLogs.length > 0) { 
+       fetchTaskSuggestions();
+    }
+  }, [isClient, taskService, user, moodLogs, tasks.length]); // Add user and moodLogs to dependency array
+
+  if (!isClient || !user) { 
     return (
       <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
-        <p className="text-lg animate-pulse text-accent font-semibold">Loading your epic vibes... ✨</p>
+        <Loader2 className="h-12 w-12 animate-spin text-accent" />
+        <p className="text-lg ml-4 text-accent font-semibold">Loading your epic vibes... ✨</p>
       </div>
     );
   }
@@ -311,7 +341,7 @@ export default function HomePage() {
                 <CardDescription>What's the tea? Spill it.</CardDescription> 
               </CardHeader>
               <CardContent>
-                <MoodLogForm onLogMood={handleLogMood} existingDates={existingDates} />
+                <MoodLogForm onLogMood={contextHandleLogMood} existingDates={existingDates} />
               </CardContent>
             </Card>
             
@@ -327,10 +357,10 @@ export default function HomePage() {
                 <CardDescription>Peep what your brain's cookin' up, bestie.</CardDescription> 
               </CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div><Info className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{user.hormoneLevels.dopamine}%</span></div>
+                <div><Sparkles className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{user.hormoneLevels.dopamine}%</span></div>
                 <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{user.hormoneLevels.adrenaline}%</span></div>
                 <div><Info className="inline h-4 w-4 mr-1 text-orange-500" />Cortisol: <span className="font-semibold">{user.hormoneLevels.cortisol}%</span></div>
-                <div><Info className="inline h-4 w-4 mr-1 text-green-500" />Serotonin: <span className="font-semibold">{user.hormoneLevels.serotonin}%</span></div>
+                <div><Sparkles className="inline h-4 w-4 mr-1 text-green-500" />Serotonin: <span className="font-semibold">{user.hormoneLevels.serotonin}%</span></div>
               </CardContent>
             </Card>
 
@@ -361,7 +391,7 @@ export default function HomePage() {
                   ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-6">No quests today, fam. Add some to pop off!</p> 
+                  <p className="text-muted-foreground text-center py-6">No quests today, fam. AI is cookin' some up, or add your own!</p> 
                 )}
               </CardContent>
             </Card>
@@ -422,3 +452,14 @@ export default function HomePage() {
       </footer>
     </div>
   );
+}
+
+export default function Page() {
+  return (
+    <UserProvider>
+      <MoodLogsProvider>
+        <HomePageContent />
+      </MoodLogsProvider>
+    </UserProvider>
+  );
+}
