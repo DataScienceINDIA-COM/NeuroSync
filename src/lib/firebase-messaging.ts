@@ -46,6 +46,7 @@ export const onMessageListener = (): Promise<() => void> =>
       resolve(() => {}); 
       return;
     }
+    
     const unsubscribe = onMessage(messagingInstance, (payload: MessagePayload) => {
       console.log("Foreground message received. ", payload);
       // You can display a toast, alert, or update UI here
@@ -56,7 +57,9 @@ export const onMessageListener = (): Promise<() => void> =>
       // To make it more flexible, we might want to pass a callback to onMessageListener.
       // However, for now, we resolve the unsubscribe function.
     });
-    resolve(unsubscribe); // Resolve the promise with the unsubscribe function
+    console.log("Foreground message listener attached.");
+    resolve(() => { console.log("Foreground message listener detached."); unsubscribe()}); // Resolve the promise with the unsubscribe function
+
   }).catch(error => {
     console.error("Error setting up onMessage listener:", error);
     // Ensure a promise is returned even on error, resolving to a no-op unsubscribe
