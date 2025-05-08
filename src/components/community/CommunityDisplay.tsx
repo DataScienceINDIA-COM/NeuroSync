@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, type FormEvent } from "react";
@@ -6,7 +5,7 @@ import type { CommunityPost } from "@/types/community";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import CommunityService from "@/components/community/CommunityService"; // Corrected import path
+import CommunityService from "@/components/community/CommunityService";
 import { generateId } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Send, Users, MessageSquarePlus } from "lucide-react";
@@ -21,8 +20,7 @@ export function CommunityDisplay() {
 
   useEffect(() => {
     setIsClient(true);
-    // Conditional instantiation of CommunityService
-    if (typeof window !== "undefined") { // This ensures CommunityService is only created client-side
+    if (typeof window !== "undefined") {
         setCommunityService(new CommunityService());
     }
   }, []);
@@ -40,14 +38,14 @@ export function CommunityDisplay() {
   const handlePostSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (newPostContent.trim() && communityService) {
-      const newPost: CommunityPost = {
+      const newPostData: CommunityPost = {
         id: generateId(),
-        userName: "Vibe Checker Pro", // GenZ vibe
+        userName: "Vibe Checker Pro", 
         message: newPostContent,
         timestamp: new Date().toISOString(),
       };
-      communityService.createPost(newPost);
-      setPosts((prevPosts) => [newPost, ...prevPosts].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()));
+      communityService.createPost(newPostData);
+      setPosts((prevPosts) => [newPostData, ...prevPosts].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()));
       setNewPostContent("");
     }
   };
@@ -59,20 +57,20 @@ export function CommunityDisplay() {
           <CardTitle className="flex items-center gap-2"><Users className="h-6 w-6 text-accent"/>The Squad Zone</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-10">Loading squad chat... Hold your horses, fam!</p> {/* GenZ vibe */}
+          <p className="text-muted-foreground text-center py-10">Loading squad chat... Hold your horses, fam! 🐎</p> 
         </CardContent>
       </Card>
     );
   }
   
-  if (!communityService) { // This block is for when isClient is true, but service hasn't been set up by useEffect yet
+  if (!communityService) {
      return (
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Users className="h-6 w-6 text-accent"/>The Squad Zone</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-center py-10">Setting up the squad zone... It's gonna be lit! 🔥</p> {/* GenZ vibe */}
+          <p className="text-muted-foreground text-center py-10">Setting up the squad zone... It's gonna be lit! 🔥</p> 
         </CardContent>
       </Card>
     );
@@ -82,20 +80,20 @@ export function CommunityDisplay() {
     <div className="space-y-6">
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2"><MessageSquarePlus className="h-6 w-6 text-accent"/>Drop a Vibe in the Squad Zone 🎤</CardTitle> {/* GenZ vibe */}
-          <CardDescription>Share your feels, ask Qs, connect with the crew. Keep it 💯, no cap.</CardDescription> {/* GenZ vibe */}
+          <CardTitle className="flex items-center gap-2"><MessageSquarePlus className="h-6 w-6 text-accent"/>Drop a Vibe in the Squad Zone 🎤</CardTitle> 
+          <CardDescription>Share your feels, ask Qs, connect with the crew. Keep it 💯, no cap.</CardDescription> 
         </CardHeader>
         <CardContent>
           <form onSubmit={handlePostSubmit} className="space-y-4">
             <Textarea
               value={newPostContent}
               onChange={(e) => setNewPostContent(e.target.value)}
-              placeholder="What's on your mind, fam? Spill the tea... 🍵" // GenZ vibe
+              placeholder="What's on your mind, fam? Spill the tea... 🍵" 
               className="w-full min-h-[120px] bg-background/70 focus:bg-background rounded-lg shadow-inner"
               required
             />
             <Button type="submit" className="w-full sm:w-auto" disabled={!newPostContent.trim()}>
-              <Send className="mr-2 h-4 w-4" /> Post It, Period.💅 {/* GenZ vibe */}
+              <Send className="mr-2 h-4 w-4" /> Post It, Period.💅 
             </Button>
           </form>
         </CardContent>
@@ -103,8 +101,8 @@ export function CommunityDisplay() {
       
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle>Fresh Drops from the Tribe 📢</CardTitle> {/* GenZ vibe */}
-          <CardDescription>See what other Vibe Checkers are saying. It's giving... community. ✨</CardDescription> {/* GenZ vibe */}
+          <CardTitle>Fresh Drops from the Tribe 📢</CardTitle> 
+          <CardDescription>See what other Vibe Checkers are saying. It's giving... community. ✨</CardDescription> 
         </CardHeader>
         <CardContent>
         {posts.length > 0 ? (
@@ -124,7 +122,7 @@ export function CommunityDisplay() {
                 </div>
             </ScrollArea>
         ) : (
-            <p className="text-muted-foreground text-center py-10">It's quiet in here... too quiet. Be the first to drop a vibe! Bet. 😉</p> {/* GenZ vibe */}
+            <p className="text-muted-foreground text-center py-10">It's quiet in here... too quiet. Be the first to drop a vibe! Bet. 😉</p> 
         )}
         </CardContent>
       </Card>
