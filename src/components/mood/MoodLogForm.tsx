@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, Smile, Frown, Meh, AlertCircle, Leaf, Zap, CloudLightning, Battery } from "lucide-react";
+import { CalendarIcon, Smile, Frown, Meh, AlertCircle, Leaf, Zap, CloudLightning, Battery, Wand2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { Mood, MoodLog } from "@/types/mood";
@@ -23,7 +23,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/input"; // Not used, but kept for consistency if needed later
 import {
   Popover,
   PopoverContent,
@@ -41,10 +41,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const moodLogSchema = z.object({
   date: z.date({
-    required_error: "A date for the mood log is required.",
+    required_error: "A date for the vibe log is required.",
   }),
-  mood: z.string().min(1, "Please select a mood."),
-  activities: z.string().min(1, "Please list at least one activity."),
+  mood: z.string().min(1, "Gotta pick a mood! Spill."),
+  activities: z.string().min(1, "What'd you get up to? Drop the deets."),
   notes: z.string().optional(),
 });
 
@@ -52,7 +52,7 @@ type MoodLogFormValues = z.infer<typeof moodLogSchema>;
 
 interface MoodLogFormProps {
   onLogMood: (log: MoodLog) => void;
-  existingDates: string[]; // To disable already logged dates
+  existingDates: string[]; 
 }
 
 const moodIcons: Record<Mood, React.ElementType> = {
@@ -84,8 +84,8 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
     const formattedDate = format(data.date, "yyyy-MM-dd");
     if (existingDates.includes(formattedDate)) {
       toast({
-        title: "Date already logged",
-        description: "You've already logged your mood for this date. Please choose another date or edit the existing log (feature coming soon!).",
+        title: "Hold Up, Fam!", // GenZ
+        description: "Looks like you already logged this day's vibe. Try another date or edit later (soon™). No cap.", // GenZ
         variant: "destructive",
       });
       return;
@@ -100,10 +100,9 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
     };
     onLogMood(newLog);
     toast({
-      title: "Mood Logged!",
-      description: `Your mood for ${format(data.date, "PPP")} has been saved.`,
+      title: "Vibe Secured! ✨💅", // GenZ
+      description: `Your mood for ${format(data.date, "PPP")} is locked in. Period.`, // GenZ
     });
-    // Reset form for next entry, maybe keep date or advance by one day? For now, simple reset.
     form.reset({ date: new Date(), mood: "", activities: "", notes: "" });
   }
 
@@ -115,21 +114,21 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           name="date"
           render={({ field }) => (
             <FormItem className="flex flex-col">
-              <FormLabel>Date</FormLabel>
+              <FormLabel>Date Check</FormLabel>
               <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-full pl-3 text-left font-normal",
+                        "w-full pl-3 text-left font-normal hover:bg-accent/10",
                         !field.value && "text-muted-foreground"
                       )}
                     >
                       {field.value ? (
                         format(field.value, "PPP")
                       ) : (
-                        <span>Pick a date</span>
+                        <span>Peep a date</span> 
                       )}
                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                     </Button>
@@ -151,7 +150,7 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
                 </PopoverContent>
               </Popover>
               <FormDescription>
-                Select the date for your mood entry.
+                When was this vibe hitting?
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -163,11 +162,11 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           name="mood"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Mood</FormLabel>
+              <FormLabel>Current Vibe Status</FormLabel> {/* GenZ */}
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="How are you feeling?" />
+                  <SelectTrigger className="hover:bg-accent/10">
+                    <SelectValue placeholder="What's the energy saying?" /> {/* GenZ */}
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -185,7 +184,7 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
                 </SelectContent>
               </Select>
               <FormDescription>
-                Choose the mood that best describes how you felt.
+                Pick your current energy. Keep it 💯.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -197,15 +196,16 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           name="activities"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Activities</FormLabel>
+              <FormLabel>Activity Recap</FormLabel> {/* GenZ */}
               <FormControl>
                 <Textarea
-                  placeholder="e.g., Morning walk, Met a friend, Worked on a project"
+                  placeholder="e.g., Chilled with the squad, aced that test, gaming glow-up" // GenZ
+                  className="focus:bg-background"
                   {...field}
                 />
               </FormControl>
               <FormDescription>
-                List activities you did, separated by commas.
+                What'd you get up to? (comma sep, if you're feeling it)
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -217,10 +217,11 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           name="notes"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Notes (Optional)</FormLabel>
+              <FormLabel>Extra Tea? (Low key optional)</FormLabel> {/* GenZ */}
               <FormControl>
                 <Textarea
-                  placeholder="Any additional thoughts or details..."
+                  placeholder="Spill any extra deets or thoughts here..." // GenZ
+                  className="focus:bg-background"
                   {...field}
                 />
               </FormControl>
@@ -228,7 +229,10 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
             </FormItem>
           )}
         />
-        <Button type="submit" className="w-full">Log Mood</Button>
+        <Button type="submit" className="w-full">
+            <Wand2 className="mr-2 h-4 w-4"/>
+            Log That Vibe! {/* GenZ */}
+        </Button>
       </form>
     </Form>
   );

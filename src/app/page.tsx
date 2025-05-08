@@ -16,26 +16,25 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format, parseISO } from "date-fns";
 import TaskService from "@/components/task/TaskService";
-// import RewardService from "@/components/rewards/RewardService"; // No longer used directly for instantiation
 import type { Task } from "@/types/task";
 import { getRandomHormone, predictHormone } from "@/ai/hormone-prediction";
 import type { Hormone } from "@/types/hormone";
 import type { Reward } from "@/types/reward";
 import RewardDisplay from "@/components/rewards/RewardDisplay";
 import CommunityDisplay from "@/components/community/CommunityDisplay";
-import { getAICoachNudge } from "@/ai/coach"; // getAICoachMessage removed as not used
+import { getAICoachNudge, useClientSideRandom } from "@/ai/coach";
 import ContentDisplay from "@/components/content/ContentDisplay";
 import type { User } from "@/types/user";
-import AvatarDisplay from "@/components/avatar/Avatar"; // Updated import
+import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Edit3, Brain, Zap } from "lucide-react"; // Added icons
+import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Sparkles } from "lucide-react";
 
-const LOCAL_STORAGE_KEY_MOOD = "moodBalanceLogs";
-const LOCAL_STORAGE_KEY_TASKS = "moodBalanceTasks";
-const LOCAL_STORAGE_KEY_USER = "moodBalanceUser";
-const LOCAL_STORAGE_KEY_REWARDS = "moodBalanceRewards";
-const LOCAL_STORAGE_KEY_NEUROPOINTS = "moodBalanceNeuroPoints";
+const LOCAL_STORAGE_KEY_MOOD = "vibeCheckLogs";
+const LOCAL_STORAGE_KEY_TASKS = "vibeCheckTasks";
+const LOCAL_STORAGE_KEY_USER = "vibeCheckUser";
+const LOCAL_STORAGE_KEY_REWARDS = "vibeCheckRewards";
+const LOCAL_STORAGE_KEY_NEUROPOINTS = "vibeCheckNeuroPoints";
 
 
 export default function HomePage() {
@@ -49,7 +48,7 @@ export default function HomePage() {
     }
     return {
       id: generateId(),
-      name: "User",
+      name: "Vibe Lord", // GenZ vibe
       completedTasks: [],
       claimedRewards: [],
       inProgressTasks: [],
@@ -58,18 +57,17 @@ export default function HomePage() {
         id: generateId(),
         name: "Avatar",
         description: "User's Avatar",
-        imageUrl: `https://picsum.photos/seed/${generateId()}/100/100`, // Dynamic placeholder
+        imageUrl: `https://picsum.photos/seed/${generateId()}/100/100`,
       },
       streak: 0,
     };
   });
 
   const taskService = useMemo(() => {
-    if (!isClient) return null; // TaskService might use localStorage or other client things implicitly via user object state or its own storage.
-    return new TaskService(user); // Pass user to TaskService
+    if (!isClient) return null;
+    return new TaskService(user);
   }, [user, isClient]);
 
-  const [nudge, setNudge] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>(() => {
      if (typeof window !== 'undefined') {
       const storedTasks = localStorage.getItem(LOCAL_STORAGE_KEY_TASKS);
@@ -77,6 +75,15 @@ export default function HomePage() {
     }
     return [];
   });
+
+  const incompleteTasks = useMemo(() => tasks.filter(t => !t.isCompleted), [tasks]);
+  const randomIncompleteTask = useClientSideRandom(incompleteTasks);
+  const nudge = useMemo(() => {
+    if (!isClient) return "Loading...";
+    return getAICoachNudge(user, randomIncompleteTask ?? null);
+  }, [user, randomIncompleteTask, isClient]);
+
+
   const [neuroPoints, setNeuroPoints] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const storedPoints = localStorage.getItem(LOCAL_STORAGE_KEY_NEUROPOINTS);
@@ -91,15 +98,14 @@ export default function HomePage() {
       if (storedRewards) return JSON.parse(storedRewards);
     }
     return [
-      { id: generateId(), name: "15 Min Guided Meditation", description: "Unlock a new meditation track.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
-      { id: generateId(), name: "Affirmation Pack", description: "Receive a pack of positive affirmations.", pointsRequired: 100, isUnlocked: false, type: "virtual" },
-      { id: generateId(), name: "Stress-Relief eBook", description: "Get a free eBook on stress management.", pointsRequired: 200, isUnlocked: false, type: "real-world" },
+      { id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
+      { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" },
+      { id: generateId(), name: "Stress-Less eBook", description: "Cop a free eBook on managing the bad vibes.", pointsRequired: 200, isUnlocked: false, type: "real-world" },
     ];
   });
 
-  // Load initial data from localStorage
   useEffect(() => {
-    setIsClient(true); // Indicate client-side rendering
+    setIsClient(true);
     const storedMoodLogs = localStorage.getItem(LOCAL_STORAGE_KEY_MOOD);
     if (storedMoodLogs) {
       try {
@@ -114,7 +120,6 @@ export default function HomePage() {
     }
   }, []);
 
-  // Persist data to localStorage
   useEffect(() => {
     if (isClient) {
       localStorage.setItem(LOCAL_STORAGE_KEY_MOOD, JSON.stringify(moodLogs));
@@ -125,46 +130,30 @@ export default function HomePage() {
     }
   }, [moodLogs, tasks, user, rewards, neuroPoints, isClient]);
 
-
-  // Initialize default tasks if none exist
   useEffect(() => {
     if (isClient && tasks.length === 0 && taskService) {
       const defaultTasks: Omit<Task, "id" | "isCompleted">[] = [
-        { name: "10 min Meditation", description: "Practice mindfulness meditation.", rewardPoints: 10, hasNeuroBoost: true},
-        { name: "30 min Exercise", description: "Engage in physical activity.", rewardPoints: 20, hasNeuroBoost: false},
-        { name: "Read for 20 mins", description: "Read a book or article.", rewardPoints: 15, hasNeuroBoost: false},
-        { name: "8 hours of Sleep", description: "Ensure adequate sleep.", rewardPoints: 20, hasNeuroBoost: false},
-        { name: "Journal Thoughts", description: "Write down your thoughts for 10 mins.", rewardPoints: 10, hasNeuroBoost: true},
+        { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true},
+        { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false},
+        { name: "Read for 20", description: "Expand the mind grapes. Big brain energy.", rewardPoints: 15, hasNeuroBoost: false},
+        { name: "Catch 8hrs Zzz's", description: "Good sleep is a W. Bet.", rewardPoints: 20, hasNeuroBoost: false},
+        { name: "Journal Dump (10m)", description: "Spill the tea in your journal. Period.", rewardPoints: 10, hasNeuroBoost: true},
       ];
       const newTasks = defaultTasks.map(taskData => taskService.createTask(taskData));
       setTasks(newTasks);
     }
-  }, [isClient, taskService]); // tasks.length removed to avoid loop if tasks are added
+  }, [isClient, taskService]); // tasks.length removed
 
-  // Update nudge and hormone levels
   useEffect(() => {
-    if (isClient && tasks.length > 0) {
-      const incompleteTasks = tasks.filter(t => !t.isCompleted);
-      if (incompleteTasks.length > 0) {
-        setNudge(getAICoachNudge(user, incompleteTasks[Math.floor(Math.random() * incompleteTasks.length)]));
-      } else {
-        setNudge(getAICoachNudge(user, null)); // General nudge if all tasks complete
-      }
+    if (isClient) {
       setUser(prevUser => ({ ...prevUser, hormoneLevels: predictHormone(prevUser) }));
     }
-  }, [tasks, user.name, isClient]); // user.name to re-evaluate nudge if user changes name.
+  }, [tasks, isClient]); // Removed user.name dependency, predictHormone depends on completed tasks from user obj
 
   const handleLogMood = (newLog: MoodLog) => {
     setMoodLogs((prevLogs) =>
       [newLog, ...prevLogs].sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
     );
-  };
-
-  const addTask = (taskData: Omit<Task, "id" | "isCompleted">) => {
-    if (taskService) {
-      const newTask = taskService.createTask(taskData);
-      setTasks((prevTasks) => [...prevTasks, newTask]);
-    }
   };
   
   const handleTaskCompletion = (taskId: string) => {
@@ -179,7 +168,7 @@ export default function HomePage() {
       setUser(prevUser => ({
         ...prevUser,
         completedTasks: [...prevUser.completedTasks, updatedTask],
-        streak: taskService.user.streak // Get updated streak from taskService's user instance
+        streak: taskService.user.streak 
       }));
     }
   };
@@ -193,16 +182,13 @@ export default function HomePage() {
         ...prevUser,
         claimedRewards: [...prevUser.claimedRewards, {...rewardToClaim, isUnlocked: true}]
       }));
-      // toast({ title: "Reward Claimed!", description: `You've unlocked ${rewardToClaim.name}.`});
     }
   };
-
 
   const existingDates = moodLogs.map((log) => log.date);
 
   if (!isClient) {
-    // Optional: Return a loading skeleton for the whole page or critical parts
-    return <div className="flex justify-center items-center min-h-screen"><Brain className="h-12 w-12 animate-pulse text-accent"/></div>;
+    return <div className="flex justify-center items-center min-h-screen"><Sparkles className="h-12 w-12 animate-pulse text-accent"/></div>;
   }
 
   return (
@@ -210,26 +196,25 @@ export default function HomePage() {
       <Header />
       <main className="flex-grow container mx-auto p-4 md:p-6 space-y-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
-          {/* Left Column */}
           <section className="lg:col-span-1 space-y-6">
-            <Card>
+            <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Profile</CardTitle>
-                <Button variant="ghost" size="icon" onClick={() => alert("Edit profile clicked")}><Edit3 className="h-4 w-4"/></Button>
+                <CardTitle>My Glow Up</CardTitle> {/* GenZ vibe */}
+                <Button variant="ghost" size="icon" onClick={() => alert("Profile edit finna drop!")}><Edit3 className="h-4 w-4"/></Button> {/* GenZ vibe */}
               </CardHeader>
               <CardContent className="flex flex-col items-center space-y-3">
                 <AvatarDisplay avatar={user.avatar} size={100}/>
                 <h2 className="text-xl font-semibold">{user.name}</h2>
-                <p className="text-sm text-muted-foreground">Streak: {user.streak} days <Zap className="inline h-4 w-4 text-yellow-400" /></p>
-                 <p className="text-lg font-bold text-accent">NeuroPoints: {neuroPoints} NP</p>
-                {nudge && <p className="text-xs text-center p-2 bg-accent/10 rounded-md text-accent-foreground">{nudge}</p>}
+                <p className="text-sm text-muted-foreground">Streak: {user.streak} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
+                 <p className="text-lg font-bold text-accent">VibePoints: {neuroPoints} VP</p>
+                {nudge && <p className="text-xs text-center p-3 bg-accent/10 rounded-lg text-accent-foreground shadow-sm">{nudge}</p>}
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle>Log Your Mood</CardTitle>
-                <CardDescription>Track daily feelings and activities.</CardDescription>
+                <CardTitle>Daily Vibe Check</CardTitle> {/* GenZ vibe */}
+                <CardDescription>What's the tea? Spill it.</CardDescription> {/* GenZ vibe */}
               </CardHeader>
               <CardContent>
                 <MoodLogForm onLogMood={handleLogMood} existingDates={existingDates} />
@@ -239,73 +224,70 @@ export default function HomePage() {
             <PersonalizedInsights moodLogs={moodLogs} />
           </section>
 
-          {/* Right Column (Main Content) */}
           <section className="lg:col-span-2 space-y-6">
             <MoodChart moodLogs={moodLogs} />
             
-            <Card>
+            <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle>Hormone Levels</CardTitle>
-                <CardDescription>Estimated based on your activities and mood.</CardDescription>
+                <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5 text-primary"/>Brain Juice Levels</CardTitle>
+                <CardDescription>Peep what your brain's cookin' up, bestie.</CardDescription> {/* GenZ vibe */}
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
-                <div><Brain className="inline h-5 w-5 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{user.hormoneLevels.dopamine}%</span></div>
-                <div><Zap className="inline h-5 w-5 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{user.hormoneLevels.adrenaline}%</span></div>
-                <div><Brain className="inline h-5 w-5 mr-1 text-orange-500" />Cortisol: <span className="font-semibold">{user.hormoneLevels.cortisol}%</span></div>
-                <div><Brain className="inline h-5 w-5 mr-1 text-green-500" />Serotonin: <span className="font-semibold">{user.hormoneLevels.serotonin}%</span></div>
+              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div><Info className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{user.hormoneLevels.dopamine}%</span></div>
+                <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{user.hormoneLevels.adrenaline}%</span></div>
+                <div><Info className="inline h-4 w-4 mr-1 text-orange-500" />Cortisol: <span className="font-semibold">{user.hormoneLevels.cortisol}%</span></div>
+                <div><Info className="inline h-4 w-4 mr-1 text-green-500" />Serotonin: <span className="font-semibold">{user.hormoneLevels.serotonin}%</span></div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Daily Tasks</CardTitle>
-                {/* <Button onClick={() => addTask({name: "New Custom Task", description:"A new task to do", rewardPoints: 5, hasNeuroBoost: false})} variant="outline" size="sm">
-                  <PlusCircle className="mr-2 h-4 w-4"/> Add Task
-                </Button> */}
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary"/>Today's Quests</CardTitle>
+                 <CardDescription>Small W's = Big Vibe Energy. Get those VibePoints!</CardDescription> {/* GenZ vibe */}
               </CardHeader>
               <CardContent>
                 {tasks.length > 0 ? (
                   <div className="space-y-3">
                   {tasks.map((task) => (
-                    <div key={task.id} className={`p-3 border rounded-lg flex justify-between items-center ${task.isCompleted ? "bg-muted opacity-60" : "bg-card"}`}>
+                    <div key={task.id} className={`p-4 border rounded-xl flex justify-between items-center transition-all ${task.isCompleted ? "bg-muted opacity-60 shadow-inner" : "bg-card hover:shadow-md"}`}>
                       <div>
                         <h4 className={`font-medium ${task.isCompleted ? "line-through text-muted-foreground" : "text-primary-foreground"}`}>{task.name}</h4>
                         <p className="text-xs text-muted-foreground">{task.description}</p>
                         <p className="text-xs mt-1">
-                          Reward: <span className="font-semibold text-accent">{task.rewardPoints} NP</span>
-                          {task.hasNeuroBoost && <span className="ml-1 text-xs text-yellow-500">(<Brain className="inline h-3 w-3"/> x10 Neuro Boost)</span>}
+                          Reward: <span className="font-semibold text-accent">{task.rewardPoints} VP</span>
+                          {task.hasNeuroBoost && <span className="ml-1 text-xs text-yellow-500 font-semibold">(<Brain className="inline h-3 w-3"/> x10 Vibe Boost!)</span>}
                         </p>
                       </div>
                       {!task.isCompleted && (
-                        <Button onClick={() => handleTaskCompletion(task.id)} size="sm" variant="outline">
-                          Complete
+                        <Button onClick={() => handleTaskCompletion(task.id)} size="sm" variant="default">
+                          GG! {/* GenZ vibe */}
                         </Button>
                       )}
                     </div>
                   ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-center py-6">No tasks for today. Add some to get started!</p>
+                  <p className="text-muted-foreground text-center py-6">No quests today, fam. Add some to pop off!</p> /* GenZ vibe */
                 )}
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle>Mood History</CardTitle>
-                <CardDescription>Review your past mood entries.</CardDescription>
+                <CardTitle>Vibe Archive</CardTitle>
+                <CardDescription>Your mood history? It's giving ✨receipts✨.</CardDescription> {/* GenZ vibe */}
               </CardHeader>
               <CardContent>
                 {moodLogs.length > 0 ? (
-                  <ScrollArea className="h-[250px] pr-4">
+                  <ScrollArea className="h-[300px] pr-4">
                     <div className="space-y-4">
                       {moodLogs.map((log) => (
-                        <Card key={log.id} className="p-4 bg-card/80 hover:shadow-md transition-shadow">
+                        <Card key={log.id} className="p-4 bg-card/90 hover:shadow-lg transition-shadow rounded-xl border-border/70">
                           <h3 className="font-semibold text-md text-primary-foreground">
-                            {format(parseISO(log.date), "EEEE, MMMM d, yyyy")}
+                            {format(parseISO(log.date), "EEEE, MMM d, yyyy")}
                           </h3>
                           <p className="text-sm text-foreground">
-                            <strong className="font-medium">Mood:</strong> {log.mood}
+                            <strong className="font-medium">Vibe:</strong> {log.mood}
                           </p>
                           {log.activities.length > 0 && (
                             <p className="text-xs text-muted-foreground">
@@ -314,7 +296,7 @@ export default function HomePage() {
                           )}
                           {log.notes && (
                             <p className="text-xs text-muted-foreground mt-1 italic">
-                              <strong>Notes:</strong> {log.notes}
+                              <strong>Extra Tea:</strong> {log.notes}
                             </p>
                           )}
                         </Card>
@@ -323,7 +305,7 @@ export default function HomePage() {
                   </ScrollArea>
                 ) : (
                   <p className="text-muted-foreground text-center py-10">
-                    No mood logs yet. Start logging to see your history!
+                    No vibes logged yet, bruh. Start tracking to see your archive! {/* GenZ vibe */}
                   </p>
                 )}
               </CardContent>
@@ -331,20 +313,20 @@ export default function HomePage() {
           </section>
         </div>
         
-        {/* Full-width sections */}
         <section className="lg:col-span-3 space-y-6">
-          <RewardDisplay rewards={rewards} neuroPoints={neuroPoints} onClaimReward={handleClaimReward} />
+           <RewardDisplay rewards={rewards} neuroPoints={neuroPoints} onClaimReward={handleClaimReward} />
         </section>
         <section className="lg:col-span-3 space-y-6">
-          <CommunityDisplay />
+           <CommunityDisplay />
         </section>
         <section className="lg:col-span-3 space-y-6">
-          <ContentDisplay />
+           <ContentDisplay />
         </section>
       </main>
-      <footer className="text-center p-4 border-t border-border/50 text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} NeuroSync Elite. Stay Mindful.</p>
+      <footer className="text-center p-6 border-t border-border/50 text-sm text-muted-foreground">
+        <p>&copy; {new Date().getFullYear()} Vibe Check. Keep it 💯. ✌️</p> {/* GenZ vibe */}
       </footer>
     </div>
   );
 }
+

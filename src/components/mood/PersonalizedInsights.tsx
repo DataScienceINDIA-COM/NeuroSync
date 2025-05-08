@@ -6,7 +6,7 @@ import { getPersonalizedInsights, type PersonalizedInsightsOutput, type Personal
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Wand2, Lightbulb } from "lucide-react";
+import { Loader2, Wand2, Lightbulb, AlertTriangle } from "lucide-react"; // AlertTriangle for error
 import { useToast } from "@/hooks/use-toast";
 
 interface PersonalizedInsightsProps {
@@ -20,11 +20,11 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
   const { toast } = useToast();
 
   const handleGetInsights = async () => {
-    if (moodLogs.length === 0) {
+    if (moodLogs.length < 3) { 
       toast({
-        title: "Not enough data",
-        description: "Please log your mood before requesting insights.",
-        variant: "destructive",
+        title: "Spill More Tea! ☕", // GenZ
+        description: "Log a few more vibes so the AI can really get your energy. Bet.", // GenZ
+        variant: "default", 
       });
       return;
     }
@@ -34,7 +34,6 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
     setInsights(null);
 
     try {
-      // Ensure moodLogs match the AI input schema, especially activities as string[]
       const formattedLogs = moodLogs.map(log => ({
         ...log,
         activities: Array.isArray(log.activities) ? log.activities : (typeof log.activities === 'string' ? log.activities.split(',').map(s => s.trim()) : []),
@@ -42,12 +41,18 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
 
       const result = await getPersonalizedInsights({ moodLogs: formattedLogs });
       setInsights(result);
+      if (result.insights.length === 0) {
+        toast({
+          title: "AI's Still Processing The Vibes... 🤔", // GenZ
+          description: "AI's still thinking... or maybe your vibes are too unique! Keep logging, bestie!", // GenZ
+        });
+      }
     } catch (e) {
       console.error("Error fetching personalized insights:", e);
-      setError("Failed to fetch insights. Please try again later.");
+      setError("Oof, AI had a main character moment. Try again in a bit, fam?"); // GenZ
       toast({
-        title: "Error",
-        description: "Failed to fetch insights. Please try again.",
+        title: "Major Glitch Alert! 😱", // GenZ
+        description: "Couldn't get your vibe report. That's a bit sus. Maybe try again?", // GenZ
         variant: "destructive",
       });
     } finally {
@@ -56,66 +61,68 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
   };
 
   return (
-    <Card>
+    <Card className="shadow-lg">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Wand2 className="h-6 w-6 text-accent" />
-          Personalized Insights
+          AI Vibe Report
         </CardTitle>
         <CardDescription>
-          Discover tips and patterns based on your mood logs.
+          AI's got the tea on your feels. Get tips to level up your mood game. No cap. {/* GenZ */}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 min-h-[150px] flex flex-col justify-center">
         {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
+          <Alert variant="destructive" className="bg-destructive/10">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <AlertTitle>Error, big yikes! 😬</AlertTitle> {/* GenZ */}
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
         {isLoading && (
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-8 w-8 animate-spin text-accent" />
-            <p className="ml-2">Generating your insights...</p>
+          <div className="flex flex-col items-center justify-center py-6 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-accent mb-3" />
+            <p className="text-sm font-medium">AI's cookin' up your vibe report... 🍳</p> {/* GenZ */}
+            <p className="text-xs text-muted-foreground">Hold tight, this is gonna be fire! 🔥</p> {/* GenZ */}
           </div>
         )}
 
         {!isLoading && !insights && !error && (
           <div className="text-center text-muted-foreground py-6">
-            <Lightbulb className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-            <p>Click the button below to generate insights based on your mood history.</p>
-            {moodLogs.length === 0 && <p className="text-sm mt-1">Log your mood first to enable insights.</p>}
+            <Lightbulb className="h-10 w-10 mx-auto mb-3 text-gray-400" />
+            <p className="font-medium">Ready for some AI wisdom? Spill it!</p> {/* GenZ */}
+            <p className="text-sm">Hit the button to get your personalized vibe check! Let's gooo!</p> {/* GenZ */}
+            {moodLogs.length < 3 && <p className="text-xs mt-2">Log at least 3 vibes for the best tea, bestie!</p>} {/* GenZ */}
           </div>
         )}
         
         {insights && insights.insights.length > 0 && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {insights.insights.map((insight, index) => (
-              <Card key={index} className="bg-background/50">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+              <Card key={index} className="bg-background/70 border-border/50 shadow-sm">
+                <CardHeader className="pb-2 pt-4">
+                  <CardTitle className="text-md flex items-center gap-2">
                     <Lightbulb className="h-5 w-5 text-primary" />
-                    Insight & Tip
+                    AI Deet & Pro-Tip ✨
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <p><strong className="font-medium">Insight:</strong> {insight.insight}</p>
-                  <p><strong className="font-medium">Actionable Tip:</strong> {insight.tip}</p>
+                <CardContent className="space-y-1.5 text-sm pb-4">
+                  <p><strong className="font-medium">The Tea:</strong> {insight.insight}</p>
+                  <p><strong className="font-medium">Level Up:</strong> {insight.tip}</p>
                 </CardContent>
-                <CardFooter>
-                  <p className="text-xs text-muted-foreground">
-                    Relevance Score: {Math.round(insight.relevanceScore * 100)}%
-                  </p>
+                <CardFooter className="text-xs text-muted-foreground pt-0 pb-3">
+                  <p>Relevance: {Math.round(insight.relevanceScore * 100)}% (Low key accurate, right?)</p> {/* GenZ */}
                 </CardFooter>
               </Card>
             ))}
           </div>
         )}
-        {!isLoading && insights && insights.insights.length === 0 && (
+        {!isLoading && insights && insights.insights.length === 0 && !error && (
            <div className="text-center text-muted-foreground py-6">
-            <p>No specific insights generated at this time. Keep logging for more personalized tips!</p>
+            <Lightbulb className="h-10 w-10 mx-auto mb-3 text-gray-400" />
+            <p className="font-medium">No specific tea from the AI rn.</p> {/* GenZ */}
+            <p className="text-sm">Keep logging those vibes for more personalized deets! You got this!</p> {/* GenZ */}
           </div>
         )}
 
@@ -123,7 +130,7 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
       <CardFooter>
         <Button 
           onClick={handleGetInsights} 
-          disabled={isLoading || moodLogs.length === 0}
+          disabled={isLoading || moodLogs.length < 1} 
           className="w-full"
         >
           {isLoading ? (
@@ -131,29 +138,9 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
           ) : (
             <Wand2 className="mr-2 h-4 w-4" />
           )}
-          Generate Insights
+          Spill the AI Tea 🍵 {/* GenZ */}
         </Button>
       </CardFooter>
     </Card>
   );
 }
-
-// Helper icon (not part of lucide-react, so defined inline or use a substitute)
-const AlertCircle = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);

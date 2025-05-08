@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Mood Balance',
-  description: 'Track your mood and gain personalized insights.',
+  title: 'Vibe Check',
+  description: 'Track your mood and gain personalized insights. Keep it real.',
 };
 
 export default function RootLayout({
@@ -32,3 +32,4 @@ export default function RootLayout({
     </html>
   );
 }
+
