@@ -14,4 +14,5 @@ export type User = {
   hormoneLevels: Hormone;
   streak: number;
   moodLogs?: MoodLog[]; // Add optional moodLogs
+  fcmToken?: string; // For Firebase Cloud Messaging
 };
