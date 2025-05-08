@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
@@ -20,7 +21,19 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const storedUser = localStorage.getItem(LOCAL_STORAGE_KEY_USER);
       if (storedUser) {
         try {
-          return JSON.parse(storedUser);
+          const parsedUser = JSON.parse(storedUser) as User;
+          // Ensure avatar has imagePath if imageUrl looks like a Firebase Storage URL
+          if (parsedUser.avatar && parsedUser.avatar.imageUrl.includes('firebasestorage.googleapis.com') && !parsedUser.avatar.imagePath) {
+            try {
+              const url = new URL(parsedUser.avatar.imageUrl);
+              const pathName = url.pathname;
+              const objectPathEncoded = pathName.substring(pathName.indexOf('/o/') + 3);
+              parsedUser.avatar.imagePath = decodeURIComponent(objectPathEncoded);
+            } catch (e) {
+              console.warn("Could not parse imagePath from avatar imageUrl", e);
+            }
+          }
+          return parsedUser;
         } catch (error) {
           console.error("Failed to parse user from localStorage", error);
           localStorage.removeItem(LOCAL_STORAGE_KEY_USER);
@@ -29,6 +42,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     // Default user generation
     const newUserId = generateId();
+    const defaultAvatarUrl = `https://picsum.photos/seed/${newUserId}/100/100`;
     return {
       id: newUserId,
       name: "Vibe Lord",
@@ -40,7 +54,10 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         id: generateId(), 
         name: "Default Avatar", 
         description: "User's Default Avatar",
-        imageUrl: `https://picsum.photos/seed/${newUserId}/100/100`, 
+        imageUrl: defaultAvatarUrl, 
+        // For picsum, imagePath is not relevant in the same way as Firebase Storage.
+        // It could be set to a representation of the picsum URL if needed for consistency,
+        // or left undefined. For now, undefined is fine as it's not a managed file.
       },
       streak: 0,
       moodLogs: [], 
@@ -54,23 +71,16 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [user]);
   
   useEffect(() => {
-    // Predict hormone levels if user exists and completedTasks or moodLogs change
-    // This mirrors how predictHormone might be used based on user activities/mood.
     if (user) {
       setUser(prevUser => {
         if (!prevUser) return null;
         const newHormones = predictHormone(prevUser);
-        // Only update if hormones actually change to prevent potential loops if predictHormone is not stable
         if (JSON.stringify(prevUser.hormoneLevels) !== JSON.stringify(newHormones)) {
           return { ...prevUser, hormoneLevels: newHormones };
         }
         return prevUser;
       });
     }
-  // Watching user.id ensures this runs if the user logs in/out (changes).
-  // Watching specific fields like completedTasks or moodLogs can be more granular.
-  // For simplicity, if the user object changes (e.g., after a task completion which updates user.completedTasks),
-  // this effect will re-evaluate hormone levels.
   }, [user?.id, user?.completedTasks, user?.moodLogs]);
 
 
@@ -88,3 +98,4 @@ export const useUser = (): UserContextType => {
   }
   return context;
 };
+

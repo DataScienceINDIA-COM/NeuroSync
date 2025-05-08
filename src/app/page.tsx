@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -75,7 +76,7 @@ function HomePageContent() {
   const randomIncompleteTask = useClientSideRandom(incompleteTasks);
   
   const nudge = useMemo(() => {
-    if (!isClient || !user) return "Loading...";
+    if (!isClient || !user) return "Loading your dose of awesome... ⏳"; // GenZ Vibe
     return getAICoachNudge(user, randomIncompleteTask ?? null);
   }, [user, randomIncompleteTask, isClient]);
 
@@ -137,17 +138,22 @@ function HomePageContent() {
       });
 
       // Listen for foreground messages
-      const unsubscribe = onMessageListener().then(payload => {
-        console.log('Received foreground message: ', payload);
-        toast({
-          title: payload.notification?.title || "New Vibe!",
-          description: payload.notification?.body || "Something cool happened!",
-        });
-      }).catch(err => console.error('Failed to listen for foreground messages: ', err));
+      const unsubscribePromise = onMessageListener().then(unsubscribeFn => {
+        console.log('Foreground message listener attached.');
+        return unsubscribeFn; // This is the actual unsubscribe function
+      }).catch(err => {
+        console.error('Failed to listen for foreground messages: ', err);
+        return () => { console.log("No-op unsubscribe due to error during listener setup."); }; // Return a no-op function on error
+      });
       
       // Cleanup listener on unmount
       return () => {
-        unsubscribe.then(fn => fn()).catch(err => console.error('Error unsubscribing from FCM: ', err));
+        unsubscribePromise.then(fn => {
+          if (typeof fn === 'function') {
+            fn(); // Call the unsubscribe function
+            console.log("Foreground message listener detached.");
+          }
+        }).catch(err => console.error('Error unsubscribing from FCM: ', err));
       };
     }
   }, [isClient, user, setUser, toast]);
@@ -257,14 +263,19 @@ function HomePageContent() {
 
     setIsGeneratingAvatar(true);
     try {
-      const result = await generateAvatar({ description: avatarDescription });
+      const result = await generateAvatar({ 
+        userId: user.id,
+        description: avatarDescription,
+        previousAvatarPath: user.avatar?.imagePath 
+      });
       setUser(prevUser => {
         if(!prevUser) return null;
         return {
           ...prevUser,
           avatar: {
-            ...(prevUser.avatar || { id: generateId(), name: 'New Avatar', description: '', imageUrl: '' }), 
+            ...(prevUser.avatar || { id: generateId(), name: 'New Avatar', description: '' }), 
             imageUrl: result.imageUrl,
+            imagePath: result.imagePath, // Store the new path
             description: `AI-generated: ${avatarDescription}`, 
           }
         }
@@ -359,14 +370,14 @@ function HomePageContent() {
           <section className="lg:col-span-1 space-y-6">
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>My Glow Up</CardTitle> 
+                <CardTitle className="drop-shadow-sm">My Glow Up</CardTitle> 
                 <Button variant="ghost" size="icon" onClick={() => alert("Profile edit finna drop!")}><Edit3 className="h-4 w-4"/></Button> 
               </CardHeader>
               <CardContent className="flex flex-col items-center space-y-3">
                 <AvatarDisplay avatar={user.avatar} size={100}/>
                 <h2 className="text-xl font-semibold">{user.name}</h2>
                 <p className="text-sm text-muted-foreground">Streak: {user.streak} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
-                 <p className="text-lg font-bold text-accent">VibePoints: {neuroPoints} VP</p>
+                 <p className="text-lg font-bold text-accent drop-shadow-md">VibePoints: {neuroPoints} VP</p>
                 {nudge && <p className="text-xs text-center p-3 bg-accent/10 rounded-lg text-accent-foreground shadow-sm">{nudge}</p>}
                 {user.fcmToken && (
                   <Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="mt-2">
@@ -379,7 +390,7 @@ function HomePageContent() {
 
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 drop-shadow-sm">
                   <ImagePlus className="h-6 w-6 text-primary" />
                   AI Avatar Studio ✨
                 </CardTitle>
@@ -393,13 +404,13 @@ function HomePageContent() {
                   value={avatarDescription}
                   onChange={(e) => setAvatarDescription(e.target.value)}
                   maxLength={200}
-                  className="min-h-[100px] focus:bg-background"
+                  className="min-h-[100px] focus:bg-background shadow-inner"
                   disabled={isGeneratingAvatar}
                 />
                 <Button
                   onClick={handleGenerateAvatar}
                   disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200}
-                  className="w-full"
+                  className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
                   {isGeneratingAvatar ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -413,7 +424,7 @@ function HomePageContent() {
             
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle>Daily Vibe Check</CardTitle> 
+                <CardTitle className="drop-shadow-sm">Daily Vibe Check</CardTitle> 
                 <CardDescription>What's the tea? Spill it.</CardDescription> 
               </CardHeader>
               <CardContent>
@@ -429,20 +440,20 @@ function HomePageContent() {
             
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Brain className="h-5 w-5 text-primary"/>Brain Juice Levels</CardTitle>
+                <CardTitle className="flex items-center gap-2 drop-shadow-sm"><Brain className="h-5 w-5 text-primary"/>Brain Juice Levels</CardTitle>
                 <CardDescription>Peep what your brain's cookin' up, bestie.</CardDescription> 
               </CardHeader>
               <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div><Sparkles className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{user.hormoneLevels.dopamine}%</span></div>
                 <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{user.hormoneLevels.adrenaline}%</span></div>
-                <div><Info className="inline h-4 w-4 mr-1 text-orange-500" />Cortisol: <span className="font-semibold">{user.hormoneLevels.cortisol}%</span></div>
-                <div><Sparkles className="inline h-4 w-4 mr-1 text-green-500" />Serotonin: <span className="font-semibold">{user.hormoneLevels.serotonin}%</span></div>
+                <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500"><path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Cortisol: <span className="font-semibold">{user.hormoneLevels.cortisol}%</span></div>
+                <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>Serotonin: <span className="font-semibold">{user.hormoneLevels.serotonin}%</span></div>
               </CardContent>
             </Card>
 
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-primary"/>Today's Quests</CardTitle>
+                <CardTitle className="flex items-center gap-2 drop-shadow-sm"><CheckCircle2 className="h-5 w-5 text-primary"/>Today's Quests</CardTitle>
                  <CardDescription>Small W's = Big Vibe Energy. Get those VibePoints!</CardDescription> 
               </CardHeader>
               <CardContent>
@@ -459,7 +470,7 @@ function HomePageContent() {
                         </p>
                       </div>
                       {!task.isCompleted && (
-                        <Button onClick={() => handleTaskCompletion(task.id)} size="sm" variant="default">
+                        <Button onClick={() => handleTaskCompletion(task.id)} size="sm" variant="default" className="shadow hover:shadow-md active:shadow-inner">
                           GG! 
                         </Button>
                       )}
@@ -474,7 +485,7 @@ function HomePageContent() {
 
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle>Vibe Archive</CardTitle>
+                <CardTitle className="drop-shadow-sm">Vibe Archive</CardTitle>
                 <CardDescription>Your mood history? It's giving ✨receipts✨.</CardDescription> 
               </CardHeader>
               <CardContent>
@@ -483,7 +494,7 @@ function HomePageContent() {
                     <div className="space-y-4">
                       {moodLogs.map((log) => (
                         <Card key={log.id} className="p-4 bg-card/90 hover:shadow-lg transition-shadow rounded-xl border-border/70">
-                          <h3 className="font-semibold text-md text-primary-foreground">
+                          <h3 className="font-semibold text-md text-primary-foreground drop-shadow-sm">
                             {format(parseISO(log.date), "EEEE, MMM d, yyyy")}
                           </h3>
                           <p className="text-sm text-foreground">
