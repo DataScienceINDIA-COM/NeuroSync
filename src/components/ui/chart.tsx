@@ -22,6 +22,7 @@ type ChartContextProps = {
   config: ChartConfig
 }
 
+
 const ChartContext = React.createContext<ChartContextProps | null>(null)
 
 function useChart() {
@@ -317,6 +318,7 @@ const ChartLegendContent = React.forwardRef<
 ChartLegendContent.displayName = "ChartLegend"
 
 // Helper to extract item config from a payload.
+
 function getPayloadConfigFromPayload(
   config: ChartConfig,
   payload: unknown,
@@ -353,6 +355,10 @@ function getPayloadConfigFromPayload(
   return configLabelKey in config
     ? config[configLabelKey]
     : config[key as keyof typeof config]
+}
+
+export interface NeuroChartProps {
+  neuroPoints: number;
 }
 
 export {

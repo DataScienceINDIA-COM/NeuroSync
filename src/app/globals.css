@@ -1,39 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+
 @layer base {
   :root {
-    --background: 240 60% 97%; /* Very Light Lavender */
-    --foreground: 240 10% 10%; /* Dark Slate Gray like */
+    --background: #E8ECEF; /* Moonlight Silver */
+    --foreground: #2A2A72; /* Cosmic Indigo */
 
     --card: 0 0% 100%; /* White */
-    --card-foreground: 240 10% 10%;
+    --card-foreground: #2A2A72; /* Cosmic Indigo */
 
-    --popover: 0 0% 100%; /* White */
-    --popover-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: #2A2A72; /* Cosmic Indigo */
 
-    --primary: 240 60% 90%; /* Soft Lavender #E6E6FA */
-    --primary-foreground: 240 10% 20%; /* Darker text for primary */
+    --primary: #2A2A72; /* Cosmic Indigo */
+    --primary-foreground: 0 0% 98%; /* White */
 
-    --secondary: 0 0% 96.1%; /* Light Gray #F5F5F5 */
-    --secondary-foreground: 240 10% 10%;
+    --secondary: #E8ECEF; /* Moonlight silver */
+    --secondary-foreground: #2A2A72; /* Cosmic Indigo */
 
-    --muted: 125 44% 94%; /* Pale Green #E8F5E9 */
-    --muted-foreground: 125 20% 30%; /* Darker green for muted */
+    --muted: #E8ECEF; /* Moonlight silver */
+    --muted-foreground: #2A2A72; /* Cosmic Indigo */
 
-    --accent: 180 100% 25.1%; /* Teal #008080 */
-    --accent-foreground: 0 0% 98%; /* White/very light for accent */
+    --accent: #FF6B6B; /* Neon Coral */
+    --accent-foreground: 240 5.9% 10%; /* Dark Navy */
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 30% 88%; /* A slightly more visible lavender border */
-    --input: 0 0% 98%; /* Very light gray for input background */
-    --ring: 180 80% 35%; /* Slightly desaturated Teal for focus rings */
+    --border: 220 13% 91%; /* Very Light Gray */
+    --input: 220 13% 91%; /* Very Light Gray */
+    --ring: 217.2 91.2% 59.8%; /* Sky Blue */
 
     --radius: 0.5rem;
-
+    
     /* Chart colors (can be adjusted based on theme) */
     --chart-1: 180 100% 30%; /* Teal variant */
     --chart-2: 240 60% 70%; /* Lavender variant */
@@ -41,38 +43,39 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
 
-    /* Sidebar variables (keeping them from scaffold) */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
+    /* Sidebar variables */
+    --sidebar-background: #A3E4D7; /* Aurora Green */
+    --sidebar-foreground: #2A2A72; /* Cosmic Indigo */
+    --sidebar-primary: #2A2A72; /* Cosmic Indigo */
+    --sidebar-primary-foreground: 0 0% 98%; /* White */
+    --sidebar-secondary: #E8ECEF; /* Moonlight Silver */
+      --sidebar-accent: #E8ECEF; /* Moonlight Silver */
+      --sidebar-accent-foreground: #2A2A72; /* Cosmic Indigo */
+    --sidebar-border: 240 3.7% 15.9%; /* Dark Slate Gray */
+    --sidebar-ring: 217.2 91.2% 59.8%; /* Sky Blue */
+   }
 
   .dark {
-    --background: 240 10% 10%;
-    --foreground: 0 0% 95%;
+    --background: 240 5.9% 10%; /* Dark Navy */
+    --foreground: 0 0% 100%; /* White */
 
-    --card: 240 10% 15%;
-    --card-foreground: 0 0% 95%;
+    --card: 240 3.7% 15.9%; /* Dark Slate Gray */
+    --card-foreground: 0 0% 98%; /* White */
 
-    --popover: 240 10% 12%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 240 3.7% 15.9%; /* Dark Slate Gray */
+    --popover-foreground: 0 0% 98%; /* White */
 
-    --primary: 240 50% 70%; /* Dark mode Soft Lavender */
-    --primary-foreground: 240 10% 5%;
+    --primary: 0 0% 100%; /* White */
+    --primary-foreground: 240 5.9% 10%; /* Dark Navy */
 
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: #E8ECEF; /* Moonlight Silver */
+    --secondary-foreground: #2A2A72; /* Cosmic Indigo */
 
-    --muted: 125 30% 20%; /* Dark mode Pale Green */
-    --muted-foreground: 125 40% 80%;
+    --muted: 240 4.8% 95.9%; /* Light Gray */
+    --muted-foreground: 240 5.9% 10%; /* Dark Navy */
 
-    --accent: 180 80% 45%; /* Dark mode Teal */
-    --accent-foreground: 0 0% 98%;
+    --accent: #FF6B6B; /* Neon Coral */
+    --accent-foreground: 240 5.9% 10%; /* Dark Navy */
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
@@ -87,24 +90,29 @@
     --chart-4: 43 74% 56%;
     --chart-5: 27 87% 57%;
 
-    /* Sidebar variables for dark mode (keeping them from scaffold) */
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar variables */
+    --sidebar-background: 240 5.9% 10%; /* Dark Navy */
+    --sidebar-foreground: 0 0% 100%; /* White */
+    --sidebar-primary: 0 0% 100%; /* White */
+    --sidebar-primary-foreground: 240 5.9% 10%; /* Dark Navy */
+    --sidebar-accent: 240 3.7% 15.9%; /* Dark Slate Gray */
+    --sidebar-accent-foreground: 0 0% 100%; /* White */
+    --sidebar-border: 240 3.7% 15.9%; /* Dark Slate Gray */
+    --sidebar-ring: 217.2 91.2% 59.8%; /* Sky Blue */
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+    h1,h2,h3,h4,h5,h6 {
+        font-weight: 700;
+        font-family: 'Poppins', sans-serif;
+    }
+    body {
+        font-family: 'Poppins', sans-serif;
+    }
+}
+@layer base {
   body {
     @apply bg-background text-foreground;
-    /* Removed explicit font-family to allow Next/Font to take precedence */
   }
 }
