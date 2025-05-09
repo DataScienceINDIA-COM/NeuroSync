@@ -1,3 +1,4 @@
+
 import type { Task } from '@/types/task';
 import type { User } from '@/types/user';
 import { getDayOfYear } from 'date-fns';
@@ -22,26 +23,32 @@ class TaskService {
   }
 
   async createTask(
+    // Allow rewardPoints to be optional, if not provided, it will be calculated.
     taskData: Omit<Task, 'id' | 'isCompleted' | 'rewardPoints'> & { rewardPoints?: number }
   ): Promise<Task> {
     
     let rewardPoints = taskData.rewardPoints;
     if (rewardPoints === undefined) {
-        // If rewardPoints are not provided (e.g., for AI suggested tasks), calculate them.
-        const currentUserMood = this.user.moodLogs?.[0]?.mood || "Neutral";
+        // If rewardPoints are not provided (e.g., for AI suggested tasks that don't include it, or manual tasks), calculate them.
+        const currentUserMood = this.user.moodLogs && this.user.moodLogs.length > 0 ? this.user.moodLogs[0].mood : "Neutral";
         const rewardPointsInput: CalculateRewardPointsInput = {
           taskDescription: taskData.description,
           userMood: currentUserMood, 
           hormoneLevels: this.user.hormoneLevels,
         };
-        rewardPoints = await calculateRewardPoints(rewardPointsInput);
+        try {
+            rewardPoints = await calculateRewardPoints(rewardPointsInput);
+        } catch (error) {
+            console.error("Failed to calculate reward points, using default:", error);
+            rewardPoints = 15; // Default if AI calculation fails
+        }
     }
 
 
     const newTask: Task = {
       id: generateId(), 
       isCompleted: false,
-      rewardPoints: rewardPoints, 
+      rewardPoints: rewardPoints, // Use calculated or provided reward points
       name: taskData.name,
       description: taskData.description,
       hasNeuroBoost: taskData.hasNeuroBoost,
@@ -100,6 +107,7 @@ class TaskService {
       this.lastCompletedDay = null; 
   }
 
+  // Updated to use the richer TaskSuggestionsOutput which contains SuggestedTask objects
   async getSuggestedTasks(moodLogs: MoodLog[], hormoneLevels: User['hormoneLevels'], completedTasks: User['completedTasks']): Promise<TaskSuggestionsOutput | null> {
     if (!this.user || !hormoneLevels || !completedTasks) {
       console.warn("User data incomplete for task suggestions.");
@@ -111,8 +119,9 @@ class TaskService {
         hormoneLevels: hormoneLevels,
         completedTasks: completedTasks,
       };
+      // getTaskSuggestions now returns TaskSuggestionsOutput which has an array of SuggestedTask
       const suggestionsOutput: TaskSuggestionsOutput = await getTaskSuggestions(taskSuggestionsInput);
-      return suggestionsOutput;
+      return suggestionsOutput; 
     } catch (error) {
       console.error("Failed to get task suggestions:", error);
       return null;

@@ -1,13 +1,11 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { Memory, getMemory } from '@/tools/memory';
-import { Message, MessageType, createMessage } from '@/tools/message';
-import { Agent, getAgent, createAgent } from '@/tools/agent';
-import { simulateUiApproval } from '@/tools/tools';
 import { z } from 'genkit';
-import { Trigger, createTrigger } from '@/tools/trigger';
+import type { Task } from '@/types/task'; // Assuming Task type is defined and matches this structure
 
+// Input schema remains the same
 const TaskSuggestionsInputSchema = z.object({
   moodLogs: z.array(z.object({
     date: z.string(),
@@ -33,98 +31,32 @@ const TaskSuggestionsInputSchema = z.object({
 
 export type TaskSuggestionsInput = z.infer<typeof TaskSuggestionsInputSchema>;
 
-// This schema is used internally for the output definition
+// Updated output schema to expect richer task objects
 const SuggestedTaskSchema = z.object({
   name: z.string().describe('The name of the suggested task. Should be catchy and GenZ-friendly.'),
   description: z.string().describe('A brief, engaging description of the task, max 2 sentences. GenZ vibe.'),
+  rewardPoints: z.number().min(10).max(30).describe('Reward points for the task, between 10 and 30.'),
   hasNeuroBoost: z.boolean().describe('Whether the task should have a neuro-boost (true/false). Be creative!'),
 });
 export type SuggestedTask = z.infer<typeof SuggestedTaskSchema>;
 
-
 const TaskSuggestionsOutputSchema = z.object({
-  suggestions: z.array(SuggestedTaskSchema).describe('An array of suggested tasks with their details (name, description, hasNeuroBoost).'),
+  suggestions: z.array(SuggestedTaskSchema).describe('An array of suggested tasks with their details (name, description, rewardPoints, hasNeuroBoost).'),
 });
 export type TaskSuggestionsOutput = z.infer<typeof TaskSuggestionsOutputSchema>;
 
 
-export async function getTaskSuggestions(input: TaskSuggestionsInput, agentId = 'taskSuggester'): Promise<TaskSuggestionsOutput> {
-  const memory = getMemory();
-  const taskSuggester = await createOrGetTaskSuggesterAgent(agentId, memory);
-  const messageContent = { input };
-  const message = createMessage("user", agentId, MessageType.REQUEST_INFORMATION, messageContent);
-
-  let response = await taskSuggester.receive_message(message);
-
-  // Simulate waiting for approval if needed
-  // In a real system, the agent would wait for a UI response and then proceed or handle rejection based on that response.
-  // For simulation, we'll use a simple while loop checking the status.
-  while (response && response.status === 'pending_approval') {
-    console.log(`Task Suggester: Command pending approval: ${response.content.command}. Please approve.`);
-    // For simulation, we'll just log and re-attempt after a short delay (simulated approval).
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate waiting 1 second for approval
-    // Conceptually, the agent would now wait for a user interaction in the UI that triggers the approval.
-    // For simulation, we'll call the simulateUiApproval tool directly.
-    if (response.content.requestId) {
-      await simulateUiApproval(response.content.requestId, true); // Simulate user approving the request
-    }
-    // Re-send the message or have the agent re-trigger the command internally after simulated approval
-    response = await taskSuggester.receive_message(message); // Re-sending the original message or checking for status update
-  }
-
-  if (!response || !response.content || !response.content.output) {
-     console.error("Task suggester did not return valid output.", response);
-     return { 
-       suggestions: [
-          { name: "Default: Chill Sesh", description: "Take 5 mins to just breathe. You got this!", hasNeuroBoost: true },
-          { name: "Default: Quick Connect", description: "Send a positive vibe to a friend!", hasNeuroBoost: false },
-       ]
-     }; // Fallback to empty suggestions
-  }
-
-  return response.content.output;
+export async function getTaskSuggestions(input: TaskSuggestionsInput): Promise<TaskSuggestionsOutput> {
+  // Direct invocation, no agent wrapping for this flow in this iteration.
+  return taskSuggestionsFlow(input);
 }
 
-
-async function createOrGetTaskSuggesterAgent(agentId: string, memory: Memory): Promise<Agent> {
-  let taskSuggester = getAgent(agentId);
-  if (!taskSuggester) {
-    taskSuggester = createAgent(agentId, memory, async (message: Message, agent:Agent) => {
-      if (message.type === MessageType.REQUEST_INFORMATION) {
-        const output = await taskSuggestionsFlow(message.content.input);
-        const newMessageContent = { output };
-        return createMessage(agent.name, message.sender, MessageType.OBSERVATION, newMessageContent);
-      } else {
-        return createMessage(agent.name, message.sender, MessageType.OBSERVATION, { message: "Message type not recognized" });
-      }
-    });
-    
-    const trigger1 = createTrigger("1", "new Mood log", "NEW_MOOD_LOG", async (message: Message, agent: Agent) => {
-      const response = await agent.use_llm(`There is a new mood log, ${JSON.stringify(message.content)}. Is there any new tasks that I should suggest?`);
-      if (response?.text?.toLocaleLowerCase().includes("yes")) {
-        const output = await taskSuggestionsFlow(message.content.input); // Assuming input is part of message.content
-        const newMessageContent = { output };
-        return createMessage(agent.name, message.sender, MessageType.OBSERVATION, newMessageContent);
-      }
-      return createMessage(agent.name, message.sender, MessageType.OBSERVATION, { message: "No new tasks needed." });
-    });
-    const trigger2 = createTrigger("2", "Information Requested", MessageType.REQUEST_INFORMATION, async (message: Message, taskSuggesterAgent: Agent) => {
-      const output = await taskSuggestionsFlow(message.content.input);
-      const newMessageContent = { output };
-      return createMessage(taskSuggesterAgent.name, message.sender, MessageType.OBSERVATION, newMessageContent);
-    });
-    taskSuggester.add_trigger(trigger1);
-    taskSuggester.add_trigger(trigger2);
-
-  }
-  return taskSuggester;
-}
 
 const taskSuggestionsFlow = ai.defineFlow(
   {
     name: 'taskSuggestionsFlow',
     inputSchema: TaskSuggestionsInputSchema,
-    outputSchema: TaskSuggestionsOutputSchema,
+    outputSchema: TaskSuggestionsOutputSchema, // Use the updated output schema
   },
   async (input) => {
     let attempts = 0;
@@ -136,7 +68,7 @@ const taskSuggestionsFlow = ai.defineFlow(
         const { output, finishReason, usage } = await ai.generate({
           prompt: `You are a fun, GenZ-style AI assistant helping a user find cool tasks to do.
           Based on the user's mood logs, hormone levels, and recently completed tasks, suggest 2 to 3 new tasks.
-          Each task MUST have a "name", a "description", and a "hasNeuroBoost" (boolean) field.
+          Each task MUST have a "name", a "description", "rewardPoints" (number between 10-30), and a "hasNeuroBoost" (boolean) field.
           Make the tasks sound engaging and relevant to improving well-being or achieving small goals.
           The "name" should be short and catchy. The "description" should be 1-2 sentences.
           
@@ -172,23 +104,33 @@ const taskSuggestionsFlow = ai.defineFlow(
             - Physical Activity: any form of movement that gets the body going.
             - Creative Expression: activities that allow for creativity and imagination.
             - Learning: acquiring new skills or knowledge.
-          Examples (for structure, not direct copying):
-          - Name: "Zen Zone Entry"
-            Description: "Take 5 deep breaths and notice how you feel. Super simple W."
-            hasNeuroBoost: true
-          - Name: "Friend Vibe Check"
-            Description: "Hit up a bestie and see how they're doing. Spread that good energy!"
-            hasNeuroBoost: false
-          - Name: "Creative Burst"
-            Description: "Doodle, write a poem, or edit a quick pic. Unleash your inner artist."
-            hasNeuroBoost: true
+          Example Output Format (MUST be valid JSON array of objects):
+          \`\`\`json
+          [
+            {
+              "name": "Zen Zone Entry",
+              "description": "Take 5 deep breaths and notice how you feel. Super simple W.",
+              "rewardPoints": 15,
+              "hasNeuroBoost": true
+            },
+            {
+              "name": "Friend Vibe Check",
+              "description": "Hit up a bestie and see how they're doing. Spread that good energy!",
+              "rewardPoints": 20,
+              "hasNeuroBoost": false
+            }
+          ]
+          \`\`\`
           
-          Provide the output as a JSON object matching the defined schema.
+          Provide the output as a JSON array of objects, each matching the structure: {"name": string, "description": string, "rewardPoints": number, "hasNeuroBoost": boolean}.
+          Do NOT wrap the JSON array in any other JSON structure. Just the array itself.
           `,
           model: 'googleai/gemini-2.0-flash',
           input: input, 
-          output: {
-            schema: TaskSuggestionsOutputSchema, 
+          // We will parse the text output manually to fit TaskSuggestionsOutputSchema
+          // as the model is asked to return a JSON array directly, not an object with a 'suggestions' key.
+          output: { 
+            format: 'text', // Expecting raw JSON string
           },
           config: { 
             temperature: 0.7, 
@@ -199,17 +141,32 @@ const taskSuggestionsFlow = ai.defineFlow(
             console.warn(`Task suggestion generation finished due to ${finishReason}. Output may be incomplete.`);
         }
         
-        if (!output || !output.suggestions || output.suggestions.length === 0) {
-          console.error("Failed to generate or parse AI response for task suggestions. Output:", output, "Usage:", usage);
+        let suggestions: SuggestedTask[] = [];
+        if (output) {
+          try {
+            // The model is prompted to return a JSON array string directly.
+            const parsedSuggestions = JSON.parse(output as string); 
+            // Validate each item against SuggestedTaskSchema
+            if (Array.isArray(parsedSuggestions)) {
+              suggestions = parsedSuggestions.filter(item => SuggestedTaskSchema.safeParse(item).success);
+            }
+          } catch (e) {
+            console.error("Failed to parse AI response for task suggestions. Raw output:", output, "Usage:", usage, "Error:", e);
+          }
+        }
+
+        if (suggestions.length === 0) {
+          console.error("No valid task suggestions parsed or generated. AI Output:", output, "Usage:", usage);
+          // Provide a fallback if parsing fails or no suggestions are made
           return { 
             suggestions: [
-              { name: "Mindful Meditation", description: "Take 10 minutes to practice mindful meditation and center yourself. #Zen", hasNeuroBoost: true },
-              { name: "Connect with a Friend", description: "Reach out to a friend and catch up. Good vibes only. 🤙", hasNeuroBoost: false },
+              { name: "Mindful Meditation", description: "Take 10 minutes to practice mindful meditation and center yourself. #Zen", rewardPoints: 15, hasNeuroBoost: true },
+              { name: "Connect with a Friend", description: "Reach out to a friend and catch up. Good vibes only. 🤙", rewardPoints: 20, hasNeuroBoost: false },
             ]
           };
         }
         
-        return output;
+        return { suggestions }; // Wrap the parsed array in the expected output schema structure
 
       } catch (error: any) {
         attempts++;
@@ -223,8 +180,8 @@ const taskSuggestionsFlow = ai.defineFlow(
             // Fallback to default suggestions after max retries
             return { 
               suggestions: [
-                { name: "Default: Quick Sketch", description: "Doodle something for 5 mins. No pressure, just vibes.", hasNeuroBoost: true },
-                { name: "Default: Gratitude Moment", description: "Think of one thing you're grateful for today.", hasNeuroBoost: false },
+                { name: "Default: Quick Sketch", description: "Doodle something for 5 mins. No pressure, just vibes.", rewardPoints: 10, hasNeuroBoost: true },
+                { name: "Default: Gratitude Moment", description: "Think of one thing you're grateful for today.", rewardPoints: 10, hasNeuroBoost: false },
               ]
             };
           }
@@ -233,8 +190,8 @@ const taskSuggestionsFlow = ai.defineFlow(
            console.error("Non-retryable error in taskSuggestionsFlow. Providing fallback.");
            return { 
             suggestions: [
-              { name: "Fallback: Hydration Check", description: "Sip some water, stay hydrated, queen/king!", hasNeuroBoost: false },
-              { name: "Fallback: Screen Break", description: "Look away from your screen for 2 mins. Your eyes will thank you.", hasNeuroBoost: false },
+              { name: "Fallback: Hydration Check", description: "Sip some water, stay hydrated, queen/king!", rewardPoints: 10, hasNeuroBoost: false },
+              { name: "Fallback: Screen Break", description: "Look away from your screen for 2 mins. Your eyes will thank you.", rewardPoints: 10, hasNeuroBoost: false },
             ]
           };
         }
@@ -245,7 +202,7 @@ const taskSuggestionsFlow = ai.defineFlow(
     console.error("Task suggestions flow exhausted attempts or had an unexpected exit.");
     return { 
       suggestions: [
-        { name: "Ultimate Fallback: Vibe Check", description: "Take a deep breath. You're doing great!", hasNeuroBoost: true },
+        { name: "Ultimate Fallback: Vibe Check", description: "Take a deep breath. You're doing great!", rewardPoints: 10, hasNeuroBoost: true },
       ]
     };
   }

@@ -38,10 +38,7 @@ import { requestNotificationPermission, onMessageListener } from '@/lib/firebase
 import { cn } from "@/lib/utils";
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
-// import { auth, googleAuthProvider, handleSignOut as firebaseLibSignOut } from '@/lib/firebase'; // No longer needed here
-// import { signInWithPopup } from 'firebase/auth'; // No longer needed here
-import { signInWithGoogle, signOutUser } from '@/services/authService'; // Import new auth service
-import { getRandomHormone } from "@/ai/hormone-prediction";
+import { signInWithGoogle, signOutUser } from '@/services/authService'; 
 
 
 const LOCAL_STORAGE_KEY_TASKS_PREFIX = "vibeCheckTasks_";
@@ -51,8 +48,8 @@ const LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX = "vibeCheckNeuroPoints_";
 
 function MainAppInterface() {
   const { moodLogs, handleLogMood: contextHandleLogMood } = useMoodLogs();
-  const { user: authUser } = useAuth(); 
-  const { user: appUser, setUser: setAppUser } = useAppUser(); 
+  const { authUser } = useAuth(); // Get Firebase auth user from AuthContext
+  const { user: appUser, setUser: setAppUser } = useAppUser(); // Get AppUser from UserContext
 
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
@@ -64,49 +61,50 @@ function MainAppInterface() {
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
 
-  const getLocalStorageKey = (prefix: string, userId?: string) => {
+  // Helper to get user-specific local storage keys
+  const getLocalStorageKey = (prefix: string, userId?: string | null) => {
     if (!userId) { 
-        return `${prefix}guest_fallback`; 
+        // This case should be rare if appUser is always populated by AuthContext
+        return `${prefix}default_fallback_no_id`; 
     }
-    if (userId.startsWith('guest_')) return `${prefix}guest`;
+    // Guests have IDs starting with 'guest_'
     return `${prefix}${userId}`;
   };
-
 
   useEffect(() => {
     setIsClient(true); 
   }, []);
 
+  // Load tasks, rewards, neuroPoints from localStorage when appUser is available
   useEffect(() => {
-    if (!isClient || !appUser) return;
+    if (!isClient || !appUser || !appUser.id) return;
 
     const userSpecificId = appUser.id;
 
     const tasksKey = getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX, userSpecificId);
     const storedTasks = localStorage.getItem(tasksKey);
-    if (storedTasks) setTasks(JSON.parse(storedTasks));
-    else setTasks([]);
+    setTasks(storedTasks ? JSON.parse(storedTasks) : []);
     
     const rewardsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX, userSpecificId);
     const storedRewards = localStorage.getItem(rewardsKey);
-    if (storedRewards) setRewards(JSON.parse(storedRewards));
-    else setRewards(userSpecificId.startsWith('guest_') ? 
+    setRewards(storedRewards ? JSON.parse(storedRewards) : (
+        userSpecificId.startsWith('guest_') ? 
         [{ id: generateId(), name: "Quick Vibe Boost (Guest)", description: "A little something for our guest!", pointsRequired: 20, isUnlocked: false, type: "virtual" }]
         :
         [{ id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
          { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" }]
-    );
+    ));
     
     const pointsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX, userSpecificId);
     const storedPoints = localStorage.getItem(pointsKey);
-    if (storedPoints) setNeuroPoints(JSON.parse(storedPoints));
-    else setNeuroPoints(0);
+    setNeuroPoints(storedPoints ? JSON.parse(storedPoints) : 0);
 
   }, [isClient, appUser]);
 
 
+  // Save tasks, rewards, neuroPoints to localStorage when they change
   useEffect(() => {
-    if (isClient && appUser) { 
+    if (isClient && appUser && appUser.id) { 
       const userSpecificId = appUser.id;
       localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX, userSpecificId), JSON.stringify(tasks));
       localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX, userSpecificId), JSON.stringify(rewards));
@@ -121,11 +119,13 @@ function MainAppInterface() {
   }, [appUser, isClient]);
 
 
+  // Firebase Cloud Messaging setup
   useEffect(() => {
-    if (isClient && authUser && appUser && setAppUser) { 
+    // Only run if client-side, authenticated (authUser exists), and appUser is loaded
+    if (isClient && authUser && appUser && !appUser.id.startsWith('guest_') && setAppUser) { 
       requestNotificationPermission().then(async token => {
         if (token) {
-          const result = await storeUserFCMToken(authUser.uid, token);
+          const result = await storeUserFCMToken(authUser.uid, token); // authUser.uid is reliable here
           if (result.success) {
              setAppUser(prevAppUser => prevAppUser ? ({ ...prevAppUser, fcmToken: token }) : null);
             toast({ title: "Notifications Enabled! 🔔", description: "You'll get cool updates now. Low-key excited!" });
@@ -145,8 +145,9 @@ function MainAppInterface() {
   }, [isClient, authUser, appUser, setAppUser, toast]);
 
 
+  // Initialize default tasks if none exist for the user
   useEffect(() => {
-    if (isClient && tasks.length === 0 && taskService && appUser && moodLogs) {
+    if (isClient && tasks.length === 0 && taskService && appUser) {
       const initializeTasks = async () => {
         const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted'>[] = [
           { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true },
@@ -162,17 +163,17 @@ function MainAppInterface() {
       };
       initializeTasks();
     }
-  }, [isClient, taskService, appUser, moodLogs, tasks.length]);
+  }, [isClient, taskService, appUser, tasks.length]);
 
 
   const handleGoogleSignIn = async () => {
-    const result = await signInWithGoogle();
+    const result = await signInWithGoogle(); // From authService
     if (result.success) {
       toast({
         title: "Signed In! 🎉",
         description: "You're logged in with Google. Let's vibe!",
       });
-      // AuthContext will handle updating appUser
+      // AuthContext handles AppUser creation/loading and setting it in UserContext
     } else {
       toast({
         title: "Sign-In Hiccup 😬",
@@ -183,13 +184,13 @@ function MainAppInterface() {
   };
 
   const handleFirebaseSignOutInternal = async () => {
-    const result = await signOutUser();
+    const result = await signOutUser(); // From authService
     if (result.success) {
       toast({
         title: "Signed Out! 👋",
         description: "You've successfully signed out. Catch ya later!",
       });
-      // AuthContext will handle updating appUser to guest or null
+      // AuthContext handles transitioning to a guest AppUser
     } else {
       toast({
         title: "Sign-Out Fail 😥",
@@ -217,7 +218,8 @@ function MainAppInterface() {
         };
       });
 
-      if (appUser.fcmToken && authUser) { 
+      // Send notification only if authenticated user with FCM token
+      if (authUser && appUser.fcmToken && !appUser.id.startsWith('guest_')) { 
         sendNotificationToUser(authUser.uid, { 
           title: "Quest Smashed! 🚀",
           body: `You just crushed '${updatedTask.name}'! Keep that W energy!`,
@@ -282,7 +284,8 @@ function MainAppInterface() {
   };
 
   const handleSendTestNotification = async () => {
-    if (!authUser || !appUser?.fcmToken) { 
+    // Only for authenticated users with FCM token
+    if (!authUser || !appUser?.fcmToken || appUser.id.startsWith('guest_')) { 
       toast({ title: "Can't Send Push! 🚧", description: "This is for logged-in users with notifications enabled.", variant: "destructive" });
       return;
     }
@@ -307,9 +310,10 @@ function MainAppInterface() {
 
   const existingDates = moodLogs.map((log) => log.date);
 
+  // Fetch AI task suggestions
   useEffect(() => {
      const fetchTaskSuggestions = async () => {
-      if (isClient && taskService && appUser && moodLogs && moodLogs.length > 0) { 
+      if (isClient && taskService && appUser && moodLogs && moodLogs.length > 0 && !appUser.id.startsWith('guest_')) { 
         const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs, appUser.hormoneLevels, appUser.completedTasks); 
         if (suggestedTaskDetails && suggestedTaskDetails.suggestions) {
           const newTasksPromises = suggestedTaskDetails.suggestions.map(async (taskDetail) => {
@@ -318,6 +322,7 @@ function MainAppInterface() {
               name: taskDetail.name,
               description: taskDetail.description,
               hasNeuroBoost: taskDetail.hasNeuroBoost,
+              // rewardPoints: taskDetail.rewardPoints, // Assuming AI flow returns this
             });
           });
           const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
@@ -330,59 +335,50 @@ function MainAppInterface() {
       }
     };
     
-    if (appUser && tasks.length <= 5 && moodLogs && moodLogs.length > 0) { 
+    // Fetch suggestions if user is authenticated, has few tasks, and has mood logs
+    if (appUser && tasks.length <= 5 && moodLogs && moodLogs.length > 0 && !appUser.id.startsWith('guest_')) { 
        fetchTaskSuggestions();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClient, taskService, appUser, moodLogs]); 
   
   const handleGuestSignIn = () => {
-    // In AuthContext, if authUser is null, a guest AppUser is created.
-    // We can trigger a re-check in AuthContext or simply rely on it.
-    // For now, AuthContext handles guest creation on initial load if no authUser.
-    // This button could potentially clear any existing authUser (sign out if any)
-    // then rely on AuthContext to establish a guest session.
-    // Or, if already guest, it does nothing.
-    if (authUser) {
+    if (authUser) { // If a user is signed in, sign them out to become guest
         handleFirebaseSignOutInternal().then(() => {
             toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
+            // AuthContext will handle setting a new guest AppUser
         });
-    } else {
+    } else if (appUser && appUser.id.startsWith('guest_')) { // Already a guest
         toast({ title: "You're already a Guest! ✨", description: "Exploring the vibes, no strings attached!"});
+    } else { // Should not happen if AuthContext correctly initializes a guest user
+        console.warn("handleGuestSignIn: No authUser and current appUser is not guest. This state should be handled by AuthContext.");
+        // Potentially force a guest state, though AuthContext should manage this.
+        // For safety, could trigger a sign out to ensure guest state is established by AuthContext.
+        handleFirebaseSignOutInternal(); 
     }
   };
 
-  if (!appUser) {
+  // Loading state for the main application UI
+  const { loading: authLoading } = useAuth();
+  if (authLoading || !appUser) { // Show loading if auth is processing or appUser isn't set yet
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
-        <div className="text-center space-y-6">
-            <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" />
-            <h1 className="text-4xl font-extrabold text-primary drop-shadow-md">Welcome to Vibe Check!</h1>
-            <p className="text-lg text-muted-foreground max-w-md mx-auto">
-                Your personal space to track moods, smash quests, and ride the good vibes.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button onClick={handleGoogleSignIn} className="text-lg py-3 px-6 shadow-lg hover:shadow-xl transition-all bg-primary hover:bg-primary/90">
-                    <svg className="mr-2 -ml-1 w-5 h-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
-                    Sign In with Google
-                </Button>
-                 <Button onClick={handleGuestSignIn} variant="outline" className="text-lg py-3 px-6 shadow-md hover:shadow-lg">
-                    <UserIcon className="mr-2 h-5 w-5" /> Or Continue as Guest
-                </Button>
-            </div>
-             <p className="text-xs text-muted-foreground mt-6">
-                By continuing, you agree to our imaginary Terms of Service and Privacy Policy.
-            </p>
-        </div>
+        <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
+        <h1 className="text-3xl font-bold text-primary mb-2">Vibe Check</h1>
+        <p className="text-muted-foreground">Loading your personalized vibe... ✨</p>
       </div>
     );
   }
-  
+
+  // If no appUser (should be caught by loading above, but as fallback)
+  // This has been moved into RootPage's conditional rendering to decide between SignIn screen and MainAppInterface
+  // So, MainAppInterface will only render if appUser IS available.
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header>
         <Header.AuthSection
-          authUser={authUser}
+          authUser={authUser} // Pass Firebase auth user
           onSignIn={handleGoogleSignIn}
           onSignOut={handleFirebaseSignOutInternal}
         />
@@ -440,20 +436,22 @@ function MainAppInterface() {
                   onChange={(e) => setAvatarDescription(e.target.value)}
                   maxLength={200}
                   className="min-h-[100px] focus:bg-background shadow-inner"
-                  disabled={isGeneratingAvatar}
+                  disabled={isGeneratingAvatar || appUser.id.startsWith('guest_')} // Disable for guests
                 />
                 <Button
                   onClick={handleGenerateAvatar}
-                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 }
+                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || appUser.id.startsWith('guest_')}
                   className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
                   {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  {isGeneratingAvatar ? "AI Makin' Magic..." : "Generate My Vibe!"}
+                  {isGeneratingAvatar ? "AI Makin' Magic..." : (appUser.id.startsWith('guest_') ? "Sign In to Generate" : "Generate My Vibe!")}
                 </Button>
+                 {appUser.id.startsWith('guest_') && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
               </CardContent>
             </Card>
           </section>
 
+          {/* ... (rest of the MainAppInterface JSX, ensure it uses appUser correctly) ... */}
           <section className="lg:col-span-2 flex flex-col space-y-6">
              <Card className="shadow-md border-accent">
               <CardHeader className="flex flex-col space-y-2">
@@ -555,30 +553,107 @@ function MainAppInterface() {
   );
 }
 
-// function AppPageLogic() { 
-//   const { loading: authLoading } = useAuth();
-//   const { user: appUser } = useAppUser();
 
-//   if (authLoading || !appUser) {
-//     return (
-//       <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
-//         <Loader2 className="h-12 w-12 animate-spin text-accent" />
-//         <p className="text-lg ml-4 text-accent font-semibold">Checking your Vibe ID... ✨</p>
-//       </div>
-//     );
-//   }
-//   return <MainAppInterface />;
-// }
-
+// RootPage component now decides whether to show SignIn or MainApp
 export default function RootPage() { 
   return (
     <AppUserProvider> 
       <AuthContextProvider> 
         <MoodLogsProvider>
-          <MainAppInterface />
+          <AppPageLogic />
         </MoodLogsProvider>
       </AuthContextProvider>
     </AppUserProvider>
   );
 }
-    
+
+// New component to handle logic for showing SignIn page or MainAppInterface
+function AppPageLogic() {
+  const { loading: authLoading } = useAuth();
+  const { user: appUser } = useAppUser();
+  const { toast } = useToast(); // Access toast for guest sign-in
+
+  const handleGoogleSignIn = async () => {
+    const result = await signInWithGoogle();
+    if (result.success) {
+      toast({
+        title: "Signed In! 🎉",
+        description: "You're logged in with Google. Let's vibe!",
+      });
+    } else {
+      toast({
+        title: "Sign-In Hiccup 😬",
+        description: `Couldn't sign you in: ${result.message || 'Unknown error'}. Try again?`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleGuestSignIn = () => {
+    // AuthContext will handle creating/loading a guest user if no authUser is present after a sign-out
+    // If already guest (meaning no authUser and appUser is guest), it effectively does nothing new on appUser side.
+    signOutUser().then((result) => { // Attempt sign out to ensure clean state for guest
+        if(result.success || result.message?.includes("No user to sign out") || result.message?.includes("auth object not initialized")){ // Consider sign out successful if no user or already signed out
+             toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
+        } else {
+            toast({ title: "Guest Mode Hiccup", description: `Could not ensure guest mode cleanly: ${result.message}.`, variant: "destructive" });
+        }
+        // Regardless of signOutUser result, AuthContext should set a guest AppUser if no authUser
+    }).catch(error => {
+        toast({ title: "Guest Mode Error", description: `Error during guest transition: ${error.message}.`, variant: "destructive" });
+    });
+  };
+
+
+  if (authLoading) { // Initial auth check is happening
+    return (
+      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
+        <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
+        <h1 className="text-3xl font-bold text-primary mb-2">Vibe Check</h1>
+        <p className="text-muted-foreground">Warming up the good vibes... ✨</p>
+      </div>
+    );
+  }
+
+  if (!appUser) { // Auth check done, but no appUser (either guest or authenticated) is set yet. This state should be very brief.
+     return (
+      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
+        <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
+        <h1 className="text-3xl font-bold text-primary mb-2">Vibe Check</h1>
+        <p className="text-muted-foreground">Finalizing your vibe profile... ほぼ完了! (Almost there!)</p>
+      </div>
+    );
+  }
+  
+  // If appUser is a guest and no Firebase authUser, show SignIn page
+  // Or if there's an authUser but for some reason appUser isn't fully aligning (e.g. id mismatch, though AuthContext should prevent this)
+  // The primary check is: if the appUser is a guest, show sign-in.
+  if (appUser.id.startsWith('guest_')) {
+     return (
+      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
+        <div className="text-center space-y-6">
+            <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" />
+            <h1 className="text-4xl font-extrabold text-primary drop-shadow-md">Welcome to Vibe Check!</h1>
+            <p className="text-lg text-muted-foreground max-w-md mx-auto">
+                Your personal space to track moods, smash quests, and ride the good vibes.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button onClick={handleGoogleSignIn} className="text-lg py-3 px-6 shadow-lg hover:shadow-xl transition-all bg-primary hover:bg-primary/90">
+                    <svg className="mr-2 -ml-1 w-5 h-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
+                    Sign In with Google
+                </Button>
+                 <Button onClick={handleGuestSignIn} variant="outline" className="text-lg py-3 px-6 shadow-md hover:shadow-lg">
+                    <UserIcon className="mr-2 h-5 w-5" /> Or Continue as Guest
+                </Button>
+            </div>
+             <p className="text-xs text-muted-foreground mt-6">
+                By continuing, you agree to our imaginary Terms of Service and Privacy Policy.
+            </p>
+        </div>
+      </div>
+    );
+  }
+
+  // If appUser exists and is not a guest, render the main application.
+  return <MainAppInterface />;
+}
