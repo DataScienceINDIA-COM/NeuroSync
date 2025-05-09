@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
@@ -17,11 +16,9 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null); // Initialized by AuthContext now
+  const [user, setUser] = useState<User | null>(null); // Initialize to null
 
-  // Load user from localStorage based on UID (done in AuthContext)
   // Save user to localStorage based on UID (done in AuthContext or here if user object itself changes)
-
   useEffect(() => {
     if (user && typeof window !== 'undefined' && user.id) {
       const key = user.id.startsWith('guest_') ? 'vibeCheckUser_guest' : `vibeCheckUser_${user.id}`;
@@ -34,14 +31,19 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (user) {
       setUser(prevUser => {
         if (!prevUser) return null;
-        const newHormones = predictHormone(prevUser); // predictHormone needs to handle null prevUser.moodLogs gracefully
+        // Ensure moodLogs is an array before passing to predictHormone
+        const moodLogsForPrediction = Array.isArray(prevUser.moodLogs) ? prevUser.moodLogs : [];
+        const newHormones = predictHormone({ ...prevUser, moodLogs: moodLogsForPrediction });
         if (JSON.stringify(prevUser.hormoneLevels) !== JSON.stringify(newHormones)) {
           return { ...prevUser, hormoneLevels: newHormones };
         }
         return prevUser;
       });
     }
-  }, [user?.id, user?.completedTasks, user?.moodLogs]);
+  // Ensure dependencies are stable objects or primitives if possible.
+  // Stringifying complex objects for dependencies can be inefficient.
+  // For now, using user.id and stringified versions of arrays/objects to detect changes.
+  }, [user?.id, JSON.stringify(user?.completedTasks), JSON.stringify(user?.moodLogs)]);
 
 
   return (
@@ -58,4 +60,3 @@ export const useUser = (): UserContextType => {
   }
   return context;
 };
-
