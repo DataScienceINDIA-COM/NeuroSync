@@ -27,16 +27,26 @@ const firebaseConfig = {
 };
 
 // Critical check for essential Firebase configuration
-if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-  const errorMessage = `CRITICAL: Firebase API Key or Project ID is missing.
-Please ensure NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_PROJECT_ID are correctly set in your .env file.
-Is API Key set? ${!!firebaseConfig.apiKey}
-Is Project ID set? ${!!firebaseConfig.projectId}
+const apiKeyMissing = !firebaseConfig.apiKey || typeof firebaseConfig.apiKey !== 'string' || firebaseConfig.apiKey.trim() === '';
+const projectIdMissing = !firebaseConfig.projectId || typeof firebaseConfig.projectId !== 'string' || firebaseConfig.projectId.trim() === '';
+
+if (apiKeyMissing || projectIdMissing) {
+  let missingVarsMessage = [];
+  if (apiKeyMissing) {
+    missingVarsMessage.push(`NEXT_PUBLIC_FIREBASE_API_KEY (current value: '${firebaseConfig.apiKey === undefined ? "undefined" : firebaseConfig.apiKey}')`);
+  }
+  if (projectIdMissing) {
+    missingVarsMessage.push(`NEXT_PUBLIC_FIREBASE_PROJECT_ID (current value: '${firebaseConfig.projectId === undefined ? "undefined" : firebaseConfig.projectId}')`);
+  }
+
+  const errorMessage = `CRITICAL: Firebase configuration error. The following environment variable(s) are missing, empty, or invalid: ${missingVarsMessage.join(' and ')}.
+Please ensure these are correctly set in your .env file and are valid strings.
 Refer to Firebase project settings to get these values. You might need to restart your development server after updating the .env file.`;
   console.error(errorMessage);
   // Stop execution if essential Firebase config is missing to make the issue unmissable.
   throw new Error(errorMessage);
 }
+
 
 let app: FirebaseApp;
 let db: Firestore;
@@ -184,4 +194,3 @@ const writeToDatabase = async (path: string, data: any) => {
 const googleAuthProvider = new GoogleAuthProvider();
 
 export { app, db, auth, storage, functions, database, analytics, googleAuthProvider, handleSignOut, uploadFile, downloadFile, callFunction, readFromDatabase, writeToDatabase };
-
