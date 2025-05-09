@@ -1,11 +1,11 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
-import { Memory, getMemory } from '../../tools/memory';
-import { Message, MessageType, createMessage } from '../../tools/message';
-import { Agent, getAgent, createAgent } from '../../tools/agent';
+import { Memory, getMemory } from '@/tools/memory';
+import { Message, MessageType, createMessage } from '@/tools/message';
+import { Agent, getAgent, createAgent } from '@/tools/agent';
 import { z } from 'genkit';
-import { Trigger, createTrigger } from '../../tools/trigger';
+import { Trigger, createTrigger } from '@/tools/trigger';
 
 const TaskSuggestionsInputSchema = z.object({
   moodLogs: z.array(z.object({

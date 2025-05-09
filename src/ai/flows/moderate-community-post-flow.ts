@@ -7,12 +7,12 @@
  * - ModerateCommunityPostOutput - The return type for the moderation function.
  */
 
-import { ai, init as genKitInit } from '@/ai/genkit';
+import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { Message, MessageType } from '../../tools/message';
-import { Agent, getMemory, getLogger, getTriggers } from '../../tools/tools';
+import { Message, MessageType } from '@/tools/message';
+import { Agent, getMemory, getLogger, getTriggers } from '@/tools/tools';
 
-export const ModerateCommunityPostInputSchema = z.object({
+const ModerateCommunityPostInputSchema = z.object({
   postContent: z.string().min(1).describe('The text content of the community post to be moderated.'),
 });
 export type ModerateCommunityPostInput = z.infer<typeof ModerateCommunityPostInputSchema>;
@@ -28,7 +28,7 @@ const ModerationFlagCategorySchema = z.enum([
     "OTHER"
 ]);
 
-export const ModerateCommunityPostOutputSchema = z.object({
+const ModerateCommunityPostOutputSchema = z.object({
   isAppropriate: z.boolean().describe('Whether the post content is considered appropriate for the community.'),
   reason: z.string().optional().describe('A brief reason if the post is deemed inappropriate. Keep it GenZ friendly but clear.'),
   flaggedCategories: z.array(ModerationFlagCategorySchema).optional().describe('Categories of inappropriate content detected.')
@@ -61,14 +61,12 @@ class CommunityModerator extends Agent {
         const postContent = message.content.postContent;
         if (postContent) {
           const moderationResult = await this.generateModerationOutput({ postContent });
-          const responseMessage = new Message({
-            sender: this.name,
-            receiver: message.sender,
-            type: MessageType.OBSERVATION,
-            content: { action: 'moderationResult', result: moderationResult },
-          }
-          
-          });
+          const responseMessage = new Message(
+            this.name,
+            message.sender,
+            MessageType.OBSERVATION,
+            { action: 'moderationResult', result: moderationResult },
+          );
           this.sendMessage(responseMessage);
         } else {
           console.error('postContent is missing in the message content');
@@ -89,7 +87,6 @@ class CommunityModerator extends Agent {
   }
 
   async useLlm(prompt: string): Promise<any> {
-    await genKitInit();
     const result = await ai.generate({
       model: 'googleai/gemini-2.0-flash',
       prompt: prompt,
@@ -190,4 +187,6 @@ class CommunityModerator extends Agent {
 
 const communityModerator = new CommunityModerator();
 
-export const moderateCommunityPost = communityModerator.moderateCommunityPost.bind(communityModerator);
+export async function moderateCommunityPost(input: ModerateCommunityPostInput): Promise<ModerateCommunityPostOutput> {
+  return communityModerator.moderateCommunityPost(input);
+}
