@@ -1,7 +1,11 @@
 'use server';
 
 import { ai } from '@/ai/genkit';
+import { Memory, getMemory } from '../../tools/memory';
+import { Message, MessageType, createMessage } from '../../tools/message';
+import { Agent, getAgent, createAgent } from '../../tools/agent';
 import { z } from 'genkit';
+import { Trigger, createTrigger } from '../../tools/trigger';
 
 const TaskSuggestionsInputSchema = z.object({
   moodLogs: z.array(z.object({
@@ -44,9 +48,73 @@ const TaskSuggestionsOutputSchema = z.object({
 export type TaskSuggestionsOutput = z.infer<typeof TaskSuggestionsOutputSchema>;
 
 
-export async function getTaskSuggestions(input: TaskSuggestionsInput): Promise<TaskSuggestionsOutput> {
-  return taskSuggestionsFlow(input);
+export async function getTaskSuggestions(input: TaskSuggestionsInput, agentId = 'taskSuggester'): Promise<TaskSuggestionsOutput> {
+  const memory = getMemory();
+  const taskSuggester = await createOrGetTaskSuggesterAgent(agentId, memory);
+  const messageContent = { input };
+  const message = createMessage("user", agentId, MessageType.REQUEST_INFORMATION, messageContent);
+  const response = await taskSuggester.receive_message(message);
+  return response.content.output;
 }
+
+
+async function createOrGetTaskSuggesterAgent(agentId: string, memory: Memory): Promise<Agent> {
+  let taskSuggester = getAgent(agentId);
+  if (!taskSuggester) {
+    taskSuggester = createAgent(agentId, memory, async (message: Message, agent:Agent) => {
+      if (message.type === MessageType.REQUEST_INFORMATION) {
+        const output = await taskSuggestionsFlow(message.content.input);
+        const newMessageContent = { output };
+        return createMessage(agent.name, message.sender, MessageType.OBSERVATION, newMessageContent);
+      } else {
+        return createMessage(agent.name, message.sender, MessageType.OBSERVATION, { message: "Message type not recognized" });
+      }
+    });
+    
+    const trigger1 = createTrigger("1", "new Mood log", "NEW_MOOD_LOG", async (message: Message, agent: Agent) => {
+      const response = await agent.use_llm(`There is a new mood log, ${message.content}. Is there any new tasks that I should suggest?`);
+      if (response.toLocaleLowerCase().includes("yes")) {
+        const output = await taskSuggestionsFlow(message.content.input);
+        const newMessageContent = { output };
+        return createMessage(agent.name, message.sender, MessageType.OBSERVATION, newMessageContent);
+      }
+      return createMessage(agent.name, message.sender, MessageType.OBSERVATION, { message: "No new tasks needed." });
+    });
+    const trigger2 = createTrigger("2", "Information Requested", MessageType.REQUEST_INFORMATION, async (message: Message, taskSuggester: Agent) => {
+      const output = await taskSuggestionsFlow(message.content.input);
+      const newMessageContent = { output };
+      return createMessage(taskSuggester.name, message.sender, MessageType.OBSERVATION, newMessageContent);
+    });
+    taskSuggester.add_trigger(trigger1);
+    taskSuggester.add_trigger(trigger2);
+
+
+
+  }
+  return taskSuggester;
+}
+
+function getTriggeredResponse(taskSuggester:Agent, message: Message) {
+
+    const triggerResponse = taskSuggester.execute_trigger(message.type);
+    return triggerResponse;
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const taskSuggestionsFlow = ai.defineFlow(
   {

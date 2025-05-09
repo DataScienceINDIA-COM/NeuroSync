@@ -7,7 +7,8 @@ import shutil
 from typing import Dict, List, Optional
 from tools.message import Message, MessageType, create_message
 from tools.memory import Memory
-from tools.logger import Logger
+from tools.logger import Logger, logger
+from tools.agent import Agent
 from tools.trigger import Trigger
 
 
@@ -135,7 +136,7 @@ def find_code_usage(query: str, path: Optional[str] = None, logger: Logger = Non
     return results
 
     
-def modify_code_structure(path: str, prompt: str) -> Dict:
+def modify_code_structure(path: str, prompt: str, logger:Logger = None) -> Dict:
     """
     Modifies the code structure in a file based on a prompt.
 
@@ -150,7 +151,7 @@ def modify_code_structure(path: str, prompt: str) -> Dict:
         with open(path, "r") as file:
             content = file.readlines()
 
-        if "move function" in prompt.lower():
+        if "move function" in prompt.lower():            
             match = re.search(
                 r"move function\s+(\w+)\s+from\s+([\w/.-]+)\s+to\s+([\w/.-]+)", prompt, re.IGNORECASE
             )
@@ -210,7 +211,7 @@ def modify_code_structure(path: str, prompt: str) -> Dict:
                     return {"error": f"Error modifying files: {from_path} or {to_path}, Error: {e}"}
             else:
                 return {"error": "Invalid move function prompt format."}
-        elif "create a new file" in prompt.lower() and "move" in prompt.lower():
+        elif "create a new file" in prompt.lower() and "move" in prompt.lower():            
             match = re.search(r"create a new file named\s+([\w/.-]+)\s+and move all functions related to\s+(.+)\s+there", prompt, re.IGNORECASE)
             if match:
                 to_path, function_concept = match.groups()                
@@ -283,9 +284,10 @@ def modify_code_structure(path: str, prompt: str) -> Dict:
     except Exception as e:
         return {"error": f"Error modifying code: {e}"}
 
+def use_llm(prompt: str, logger: Logger = None) -> Dict:
+    return {"response": f"Response for: {prompt}"}
 
-import unittest
-import shutil
+
 
 
 
@@ -318,37 +320,51 @@ class TestTools(unittest.TestCase):
         if os.path.exists("test_dir/file2.txt"):
             with open("test_dir/file2.txt", "w") as f:
                 f.write("This is a test text file.")
+    
+    def test_agent(self):
+        memory = Memory()
+        agent = Agent("Test Agent", memory, logger, [])
+        message = Message("Test Sender", "Test Agent", MessageType.OBSERVATION, {"content": "Test message"})
+        response = agent.receive_message(message)
+        self.assertEqual(response, {"message": "Message received and procesed", "status": "success"})
+        self.assertIsNotNone(agent.use_llm("Test prompt"))
+        trigger = Trigger("test_trigger", "test_trigger", [], "new_message")
+        agent.add_trigger(trigger)
+        agent.execute_trigger("new_message")
+        
 
     def test_get_file_content_summary(self):
         memory = Memory()
-        self.assertEqual(get_file_content_summary("test_dir/file1.py",memory)["status"], "success")
-        self.assertEqual(get_file_content_summary("test_dir/file2.txt",memory)["status"], "success")
-        self.assertIn("error", get_file_content_summary("test_dir/nonexistent.txt",memory))
-        self.assertEqual(get_file_content_summary("test_dir/file4.ts",memory)["status"], "success")
-        self.assertEqual(get_file_content_summary("test_dir/file6.py",memory)["status"], "success")
-        self.assertIn("text_summary", get_file_content_summary("test_dir/file6.py",memory)["summary"])
+        self.assertEqual(get_file_content_summary("test_dir/file1.py", memory)["status"], "success")
+        self.assertEqual(get_file_content_summary("test_dir/file2.txt", memory)["status"], "success")
+        self.assertIn("error", get_file_content_summary("test_dir/nonexistent.txt", memory))
+        self.assertEqual(get_file_content_summary("test_dir/file4.ts", memory)["status"], "success")
+        self.assertEqual(get_file_content_summary("test_dir/file6.py", memory)["status"], "success")
+        self.assertIn("text_summary", get_file_content_summary("test_dir/file6.py", memory)["summary"])
 
     def test_get_file_content_summary_errors(self):
         memory = Memory()
         result = get_file_content_summary("test_dir/nonexistent.txt", memory)
         self.assertIn("error", result)
         self.assertIn("File not found", result["error"])
+        
 
     def test_find_code_usage(self):
         logger = Logger()
         self.assertEqual(find_code_usage("test_function", "test_dir/file1.py", logger)["query"], "test_function")
-        self.assertTrue(len(find_code_usage("test_function2")) > 0)
-        self.assertTrue(len(find_code_usage("print")) > 0)
-        self.assertTrue(len(find_code_usage("test_function5")) > 0)
-        self.assertNotEqual(len(find_code_usage("nonexistent")), 0)
+        self.assertTrue(len(find_code_usage("test_function2", logger=logger)["usages"]) > 0)
+        self.assertTrue(len(find_code_usage("print", logger=logger)["usages"]) > 0)
+        self.assertTrue(len(find_code_usage("test_function5", logger=logger)["usages"]) > 0)
+        self.assertEqual(len(find_code_usage("nonexistent", logger=logger)["usages"]), 0)
 
     def test_modify_code_structure(self):
-        
+        logger = Logger()
         self.assertEqual(
             modify_code_structure(
                 "test_dir/file1.py",
                 "move function test_function from test_dir/file1.py to test_dir/file2.txt",
-            )["status"], "success"
+                logger=logger
+            )["status"], "success"            
         )
         self.assertEqual(
             modify_code_structure(
@@ -356,10 +372,9 @@ class TestTools(unittest.TestCase):
                 "create a new file named test_dir/mood/mood.py and move all functions related to mood log there",
             )["status"], "success"
         )
-
-        self.assertIn("error", modify_code_structure("test_dir/file3.py", "move function test_function from test_dir/file1.py to nonexistent.txt"))
-        self.assertIn("error", modify_code_structure("test_dir/file3.py", "invalid move prompt"))
-        self.assertIn("error", modify_code_structure("nonexistent.py", "move function test_function from test_dir/file1.py to test_dir/file2.txt"))
+        self.assertIn("error", modify_code_structure("test_dir/file3.py", "move function test_function from test_dir/file1.py to nonexistent.txt", logger=logger))
+        self.assertIn("error", modify_code_structure("test_dir/file3.py", "invalid move prompt", logger=logger))
+        self.assertIn("error", modify_code_structure("nonexistent.py", "move function test_function from test_dir/file1.py to test_dir/file2.txt", logger=logger))
 
 if __name__ == "__main__":
     unittest.main()
