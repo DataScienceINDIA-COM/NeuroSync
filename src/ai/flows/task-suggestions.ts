@@ -1,9 +1,11 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
 import { Memory, getMemory } from '@/tools/memory';
 import { Message, MessageType, createMessage } from '@/tools/message';
 import { Agent, getAgent, createAgent } from '@/tools/agent';
+import { simulateUiApproval } from '@/tools/tools'; 
 import { z } from 'genkit';
 import { Trigger, createTrigger } from '@/tools/trigger';
 
@@ -53,7 +55,23 @@ export async function getTaskSuggestions(input: TaskSuggestionsInput, agentId = 
   const taskSuggester = await createOrGetTaskSuggesterAgent(agentId, memory);
   const messageContent = { input };
   const message = createMessage("user", agentId, MessageType.REQUEST_INFORMATION, messageContent);
-  const response = await taskSuggester.receive_message(message);
+
+  let response = await taskSuggester.receive_message(message);
+
+  // Simulate waiting for approval if needed
+  // In a real system, the agent would wait for a UI response and then proceed or handle rejection based on that response.
+  // For simulation, we'll use a simple while loop checking the status.
+  while (response && response.status === 'pending_approval') {
+    console.log(`Task Suggester: Command pending approval: ${response.content.command}. Please approve.`);
+    // For simulation, we'll just log and re-attempt after a short delay (simulated approval).
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate waiting 1 second for approval
+    // Conceptually, the agent would now wait for a user interaction in the UI that triggers the approval.
+    // For simulation, we'll call the simulateUiApproval tool directly.
+    await simulateUiApproval(response.content.requestId, true); // Simulate user approving the request
+    // Re-send the message or have the agent re-trigger the command internally after simulated approval
+ response = await taskSuggester.receive_message(message); // Re-sending the original message or checking for status update
+  }
+
   return response.content.output;
 }
 
@@ -96,7 +114,7 @@ async function createOrGetTaskSuggesterAgent(agentId: string, memory: Memory): P
 
 function getTriggeredResponse(taskSuggester:Agent, message: Message) {
 
-    const triggerResponse = taskSuggester.execute_trigger(message.type);
+    const triggerResponse = taskSuggester.execute_trigger(message.type as string); // Cast message.type to string
     return triggerResponse;
   }
 
@@ -194,7 +212,7 @@ const taskSuggestionsFlow = ai.defineFlow(
       }
     });
 
-    if (finishReason !== 'stop' && finishReason !== 'length') {
+    if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
         console.warn(`Task suggestion generation finished due to ${finishReason}. Output may be incomplete.`);
     }
     

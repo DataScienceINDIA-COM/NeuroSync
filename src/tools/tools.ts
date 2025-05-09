@@ -39,4 +39,56 @@ export function getTriggers(agentName?: string): Trigger[] {
     return [];
 }
 
+
+// Simulated approval responses store
+const simulatedApprovalResponses: Record<string, { approved: boolean }> = {};
+
+/**
+ * Simulates running a terminal command.
+ * In a real application, this would involve more complex logic, potentially using child_process
+ * and actual permission checks. For now, it simulates requiring approval.
+ */
+export async function runTerminalCommand(command: string, requireApproval: boolean = true): Promise<{
+    status: 'success' | 'pending_approval' | 'denied' | 'error';
+    output?: string;
+    error?: string;
+    command?: string;
+    requestId?: string;
+    message?: string;
+}> {
+    const requestId = `cmd_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    // Simulate simple command execution for allowed commands if approval is not strictly required
+    if (!requireApproval && (command.startsWith('ls') || command.startsWith('echo'))) {
+        // Extremely simplified simulation for common safe commands
+        if (command.startsWith('ls')) return { status: 'success', output: 'file1.txt directory1' };
+        if (command.startsWith('echo')) return { status: 'success', output: command.substring(5) };
+    }
+    
+    // For other commands or if approval is required
+    if (requireApproval) {
+        console.log(`Terminal command "${command}" requires approval. Request ID: ${requestId}`);
+        // In a real app, you'd wait for an external UI to call simulateUiApproval (or a real approval endpoint)
+        return { status: 'pending_approval', command, requestId, message: `Command "${command}" requires user approval.` };
+    }
+
+    // Fallback for unhandled cases or if requireApproval is false but command is not in the simple allow list
+    return { status: 'error', error: 'Command execution simulated as unhandled or not explicitly allowed without approval.', command };
+}
+
+
+/**
+ * Simulates an external UI sending an approval response.
+ */
+export async function simulateUiApproval(requestId: string, approved: boolean): Promise<{
+    status: 'success' | 'error';
+    message: string;
+}> {
+    if (requestId) {
+        simulatedApprovalResponses[requestId] = { approved };
+        return { status: 'success', message: `Simulated UI approval response (${approved}) received for request ID: ${requestId}` };
+    }
+    return { status: 'error', message: 'Request ID not provided for UI approval simulation.'};
+}
+
 // Add other tool definitions or re-exports as needed based on errors in other flows.

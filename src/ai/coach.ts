@@ -10,7 +10,7 @@ import { Agent } from '@/tools/agent';
 import type { Message } from '@/tools/message';
 import { MessageType, createMessage } from '@/tools/message';
 import { Trigger, createTrigger } from '@/tools/trigger';
-
+import { runTerminalCommand, simulateUiApproval } from '@/tools/tools'; 
 
 // This class definition seems to be for a different purpose than the getAICoachNudge function.
 // It's related to task suggestions and uses an Agent model, which is more complex.
@@ -26,6 +26,23 @@ class AICoach extends Agent {
                     // This is a simplified example.
                     // In a real scenario, you might use LLM to generate a nudge based on user data in message.content
                     const nudge = this.generateNudgeText(message.content.user, message.content.incompleteTask);
+
+                    // Example of using runTerminalCommand and handling pending approval
+                    const commandResult = await runTerminalCommand('ls -l', true); // Example command requiring approval.
+                    // In a real system, if the status is 'pending_approval', the agent would typically
+                    // enter a waiting state and wait for a UI response (user approval/rejection)
+                    if (commandResult.status === 'pending_approval') {
+                        logger.log(`Command '${commandResult.command}' requires user approval. Informing user.`);
+                        // Simulate informing the user (in a real app, this would be a UI notification)
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate waiting for approval
+                        // Conceptual step: After receiving a real approval response from the UI, the agent would
+                        // call a tool to signal the response back to the system.
+                        // In this simulation, we directly call the simulateUiApproval tool.
+                        logger.log(`Simulating UI approval for request ID: ${commandResult.requestId}`);
+                        const approvalResponse = await simulateUiApproval(commandResult.requestId, true); // Simulate user approving the command
+                        logger.log(`Simulated approval response: ${JSON.stringify(approvalResponse)}`);
+                        // In a real scenario, you would wait for user input before trying again.
+                    }
                     return createMessage(agent.name, message.sender, MessageType.OBSERVATION, { nudge });
                 }
             }
