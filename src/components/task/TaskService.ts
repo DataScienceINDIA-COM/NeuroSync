@@ -13,7 +13,7 @@ import type { MoodLog } from '@/types/mood';
  */
 class TaskService {
   private db: { tasks: Task[] }; 
-  public user: User; // Made public to allow streak access from page
+  public user: User; 
   private lastCompletedDay: number | null = null; 
 
   constructor(user: User) {
@@ -22,24 +22,29 @@ class TaskService {
   }
 
   async createTask(
-    taskData: Omit<Task, 'id' | 'isCompleted'>
+    taskData: Omit<Task, 'id' | 'isCompleted' | 'rewardPoints'> & { rewardPoints?: number }
   ): Promise<Task> {
     
-    const currentUserMood = this.user.moodLogs?.[0]?.mood || "Neutral";
+    let rewardPoints = taskData.rewardPoints;
+    if (rewardPoints === undefined) {
+        // If rewardPoints are not provided (e.g., for AI suggested tasks), calculate them.
+        const currentUserMood = this.user.moodLogs?.[0]?.mood || "Neutral";
+        const rewardPointsInput: CalculateRewardPointsInput = {
+          taskDescription: taskData.description,
+          userMood: currentUserMood, 
+          hormoneLevels: this.user.hormoneLevels,
+        };
+        rewardPoints = await calculateRewardPoints(rewardPointsInput);
+    }
 
-    const rewardPointsInput: CalculateRewardPointsInput = {
-      taskDescription: taskData.description,
-      userMood: currentUserMood, 
-      hormoneLevels: this.user.hormoneLevels,
-    };
-
-    const calculatedRewardPoints = await calculateRewardPoints(rewardPointsInput);
 
     const newTask: Task = {
       id: generateId(), 
       isCompleted: false,
-      rewardPoints: calculatedRewardPoints, 
-      ...taskData, 
+      rewardPoints: rewardPoints, 
+      name: taskData.name,
+      description: taskData.description,
+      hasNeuroBoost: taskData.hasNeuroBoost,
     };
     
     this.db.tasks.push(newTask);
@@ -95,26 +100,26 @@ class TaskService {
       this.lastCompletedDay = null; 
   }
 
-  async getSuggestedTasks(moodLogs: MoodLog[]): Promise<SuggestedTask[] | null> {
-    if (!this.user || !this.user.hormoneLevels || !this.user.completedTasks) {
+  async getSuggestedTasks(moodLogs: MoodLog[], hormoneLevels: User['hormoneLevels'], completedTasks: User['completedTasks']): Promise<TaskSuggestionsOutput | null> {
+    if (!this.user || !hormoneLevels || !completedTasks) {
       console.warn("User data incomplete for task suggestions.");
       return null;
     }
     try {
       const taskSuggestionsInput: TaskSuggestionsInput = {
         moodLogs: moodLogs,
-        hormoneLevels: this.user.hormoneLevels,
-        completedTasks: this.user.completedTasks,
+        hormoneLevels: hormoneLevels,
+        completedTasks: completedTasks,
       };
       const suggestionsOutput: TaskSuggestionsOutput = await getTaskSuggestions(taskSuggestionsInput);
-      return suggestionsOutput.suggestions;
+      return suggestionsOutput;
     } catch (error) {
       console.error("Failed to get task suggestions:", error);
       return null;
     }
   }
 
-  // New method to calculate reward points for a task
+  // This method is kept for explicitness but its core logic is now also in createTask
   async calculateRewardPointsForTask(taskDescription: string, userMood: string, hormoneLevels: User['hormoneLevels']): Promise<number> {
     const rewardPointsInput: CalculateRewardPointsInput = {
       taskDescription,

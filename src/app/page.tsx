@@ -63,7 +63,7 @@ function MainAppInterface() {
   const [isSendingNotification, setIsSendingNotification] = useState(false);
 
   const getLocalStorageKey = (prefix: string, userId?: string) => {
-    if (!userId) { // Fallback if appUser.id is somehow not available yet
+    if (!userId) { 
         return `${prefix}guest_fallback`; 
     }
     if (userId.startsWith('guest_')) return `${prefix}guest`;
@@ -153,9 +153,9 @@ function MainAppInterface() {
         
         const newTasksPromises = defaultTaskData.map(async (taskData) => {
           if(!taskService || !appUser) return null; 
-          const currentUserMood = moodLogs?.[0]?.mood || "Neutral"; 
-          const rewardPoints = await taskService.calculateRewardPointsForTask(taskData.description, currentUserMood, appUser.hormoneLevels);
-          return taskService.createTask({...taskData, rewardPoints});
+          // Reward points are now part of defaultTaskData and will be used directly by createTask
+          // The AI calculation via taskService.calculateRewardPointsForTask is for AI suggested tasks
+          return taskService.createTask(taskData);
         });
         const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
         setTasks(newTasks);
@@ -256,7 +256,6 @@ function MainAppInterface() {
 
   const handleGenerateAvatar = async () => {
     if (!appUser || !setAppUser) return; 
-     // Allow avatar generation for guests too, using appUser.id
     if (avatarDescription.trim().length < 10) {
       toast({ title: "Yo, Hold Up! 🧐", description: "Your avatar prompt needs a bit more spice! At least 10 chars, fam.", variant: "destructive" });
       return;
@@ -264,7 +263,7 @@ function MainAppInterface() {
     setIsGeneratingAvatar(true);
     try {
       const result = await generateAvatar({ 
-        userId: appUser.id, // Use appUser.id, works for guests and auth users
+        userId: appUser.id, 
         description: avatarDescription,
         previousAvatarPath: appUser.avatar?.imagePath 
       });
@@ -291,7 +290,7 @@ function MainAppInterface() {
   };
 
   const handleSendTestNotification = async () => {
-    if (!authUser || !appUser?.fcmToken) { // Test notifications only for authenticated users with tokens
+    if (!authUser || !appUser?.fcmToken) { 
       toast({ title: "Can't Send Push! 🚧", description: "This is for logged-in users with notifications enabled.", variant: "destructive" });
       return;
     }
@@ -320,16 +319,16 @@ function MainAppInterface() {
      const fetchTaskSuggestions = async () => {
       if (isClient && taskService && appUser && moodLogs && moodLogs.length > 0) { 
         const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs, appUser.hormoneLevels, appUser.completedTasks); 
-        if (suggestedTaskDetails) {
-          const newTasksPromises = suggestedTaskDetails.map(async (taskDetail) => {
+        if (suggestedTaskDetails && suggestedTaskDetails.suggestions) {
+          const newTasksPromises = suggestedTaskDetails.suggestions.map(async (taskDetail) => {
             if(!taskService || !appUser) return null;
-            const currentUserMood = moodLogs?.[0]?.mood || "Neutral";
-            const rewardPoints = await taskService.calculateRewardPointsForTask(taskDetail.description, currentUserMood, appUser.hormoneLevels);
+            // taskDetail now contains name, description, hasNeuroBoost from AI
+            // rewardPoints will be calculated by createTask -> calculateRewardPoints tool
             return taskService.createTask({ 
               name: taskDetail.name,
               description: taskDetail.description,
               hasNeuroBoost: taskDetail.hasNeuroBoost,
-              rewardPoints: rewardPoints,
+              // rewardPoints are calculated inside createTask using the AI tool
             });
           });
           const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
@@ -342,6 +341,7 @@ function MainAppInterface() {
       }
     };
     
+    // Fetch suggestions if there are few tasks and some mood logs exist
     if (appUser && tasks.length <= 5 && moodLogs && moodLogs.length > 0) { 
        fetchTaskSuggestions();
     }
@@ -365,7 +365,6 @@ function MainAppInterface() {
               <CardHeader className="flex flex-col gap-2">
                 <div className="flex flex-row items-center justify-between">
                   <CardTitle className="drop-shadow-sm font-extrabold text-2xl text-primary">My Vibe</CardTitle>
-                  {/* Profile edit button (optional, kept from original) */}
                   <Button variant="ghost" size="icon" onClick={() => toast({title: "Profile Edit Soon!", description:"This feature is cookin'!"})}  className="mr-1">
                       <Edit3 className="h-4 w-4" />
                   </Button>
@@ -376,7 +375,7 @@ function MainAppInterface() {
               </CardHeader>
               <CardContent className="flex flex-col items-center space-y-3 ">
                 <AvatarDisplay 
-                  avatar={appUser?.avatar || null} // Pass appUser's avatar
+                  avatar={appUser?.avatar || null} 
                   size={100} 
                 />
                 <h2 className="text-2xl font-bold tracking-tight text-center">{appUser?.name || "Vibe User"}</h2>

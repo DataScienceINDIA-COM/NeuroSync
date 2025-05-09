@@ -37,7 +37,6 @@ export type TaskSuggestionsInput = z.infer<typeof TaskSuggestionsInputSchema>;
 const SuggestedTaskSchema = z.object({
   name: z.string().describe('The name of the suggested task. Should be catchy and GenZ-friendly.'),
   description: z.string().describe('A brief, engaging description of the task, max 2 sentences. GenZ vibe.'),
-  // rewardPoints will be calculated by the CalculateRewardPointsTool when the task is formally created
   hasNeuroBoost: z.boolean().describe('Whether the task should have a neuro-boost (true/false). Be creative!'),
 });
 export type SuggestedTask = z.infer<typeof SuggestedTaskSchema>;
@@ -75,7 +74,12 @@ export async function getTaskSuggestions(input: TaskSuggestionsInput, agentId = 
 
   if (!response || !response.content || !response.content.output) {
      console.error("Task suggester did not return valid output.", response);
-     return { suggestions: [] }; // Fallback to empty suggestions
+     return { 
+       suggestions: [
+          { name: "Default: Chill Sesh", description: "Take 5 mins to just breathe. You got this!", hasNeuroBoost: true },
+          { name: "Default: Quick Connect", description: "Send a positive vibe to a friend!", hasNeuroBoost: false },
+       ]
+     }; // Fallback to empty suggestions
   }
 
   return response.content.output;
@@ -131,7 +135,7 @@ const taskSuggestionsFlow = ai.defineFlow(
       try {
         const { output, finishReason, usage } = await ai.generate({
           prompt: `You are a fun, GenZ-style AI assistant helping a user find cool tasks to do.
-          Based on the user's mood logs, hormone levels, and recently completed tasks, suggest 3 new tasks.
+          Based on the user's mood logs, hormone levels, and recently completed tasks, suggest 2 to 3 new tasks.
           Each task MUST have a "name", a "description", and a "hasNeuroBoost" (boolean) field.
           Make the tasks sound engaging and relevant to improving well-being or achieving small goals.
           The "name" should be short and catchy. The "description" should be 1-2 sentences.
@@ -160,7 +164,7 @@ const taskSuggestionsFlow = ai.defineFlow(
           No tasks recently completed.
           {{/if}}
 
-          Suggest 3 tasks now.
+          Suggest 2 to 3 tasks now.
           The tasks MUST align with the app's GenZ wellness theme.
             Include tasks related to:
             - Mindfulness: activities that focus on being present and aware.
@@ -168,35 +172,26 @@ const taskSuggestionsFlow = ai.defineFlow(
             - Physical Activity: any form of movement that gets the body going.
             - Creative Expression: activities that allow for creativity and imagination.
             - Learning: acquiring new skills or knowledge.
-          Examples:
-          - Mindfulness:
-            - "Meditate with an app for 10 minutes." (hasNeuroBoost: true)
-            - "Practice mindful breathing." (hasNeuroBoost: true)
-            - "Take a digital detox hour." (hasNeuroBoost: true)
-          - Social Connection:
-            - "Call a friend to catch up." (hasNeuroBoost: false)
-            - "Play a game online with friends." (hasNeuroBoost: false)
-            - "Have a meal with family without phones." (hasNeuroBoost: false)
-          - Physical Activity:
-            - "Do a 15-minute workout video." (hasNeuroBoost: true)
-            - "Go for a brisk walk in the park." (hasNeuroBoost: false)
-            - "Dance to your favorite playlist for 20 minutes." (hasNeuroBoost: true)
-          - Creative Expression:
-            - "Sketch or doodle for 15 minutes." (hasNeuroBoost: true)
-            - "Write a short poem." (hasNeuroBoost: true)
-            - "Take some creative photos." (hasNeuroBoost: true)
-          - Learning:
-            - "Watch an educational video online." (hasNeuroBoost: true)
-            - "Read a chapter of a book." (hasNeuroBoost: true)
-            - "Listen to a podcast on a new topic." (hasNeuroBoost: true)
+          Examples (for structure, not direct copying):
+          - Name: "Zen Zone Entry"
+            Description: "Take 5 deep breaths and notice how you feel. Super simple W."
+            hasNeuroBoost: true
+          - Name: "Friend Vibe Check"
+            Description: "Hit up a bestie and see how they're doing. Spread that good energy!"
+            hasNeuroBoost: false
+          - Name: "Creative Burst"
+            Description: "Doodle, write a poem, or edit a quick pic. Unleash your inner artist."
+            hasNeuroBoost: true
+          
+          Provide the output as a JSON object matching the defined schema.
           `,
           model: 'googleai/gemini-2.0-flash',
-          input: input, // Pass structured input directly to Handlebars template
+          input: input, 
           output: {
-            schema: TaskSuggestionsOutputSchema, // Expect structured output
+            schema: TaskSuggestionsOutputSchema, 
           },
           config: { 
-            temperature: 0.7, // More creative suggestions
+            temperature: 0.7, 
           }
         });
 
@@ -204,16 +199,12 @@ const taskSuggestionsFlow = ai.defineFlow(
             console.warn(`Task suggestion generation finished due to ${finishReason}. Output may be incomplete.`);
         }
         
-        // The output is already validated by Genkit against TaskSuggestionsOutputSchema
-        // If output is null or undefined, it means validation failed or generation failed.
         if (!output || !output.suggestions || output.suggestions.length === 0) {
           console.error("Failed to generate or parse AI response for task suggestions. Output:", output, "Usage:", usage);
-          // Fallback if AI fails
           return { 
             suggestions: [
-              { name: "Mindful Meditation", description: "Take 10 minutes to practice mindful meditation and center yourself.", hasNeuroBoost: true },
-              { name: "Connect with a Friend", description: "Reach out to a friend and catch up. Good vibes only.", hasNeuroBoost: false },
-              { name: "Stretch Break", description: "Spend 10 minutes stretching your body. Shake off that stiffness!", hasNeuroBoost: false },
+              { name: "Mindful Meditation", description: "Take 10 minutes to practice mindful meditation and center yourself. #Zen", hasNeuroBoost: true },
+              { name: "Connect with a Friend", description: "Reach out to a friend and catch up. Good vibes only. 🤙", hasNeuroBoost: false },
             ]
           };
         }
@@ -223,27 +214,39 @@ const taskSuggestionsFlow = ai.defineFlow(
       } catch (error: any) {
         attempts++;
         console.error(`Attempt ${attempts} failed for taskSuggestionsFlow: ${error.message}`);
-        if (error.message && (error.message.includes('GEMINI_RESOURCE_EXHAUSTED') || error.message.includes('429') || error.message.includes('Resource has been exhausted')) ) {
+        if (error.status === 'GEMINI_RESOURCE_EXHAUSTED' || error.message?.includes('429') || error.message?.includes('Resource has been exhausted')) {
           if (attempts < maxAttempts) {
             console.log(`Retrying in ${retryDelay / 1000} seconds...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
           } else {
-            console.error(`Max retry attempts (${maxAttempts}) reached. Giving up.`);
-            throw error; // Re-throw the error after max attempts
+            console.error(`Max retry attempts (${maxAttempts}) reached. Giving up on AI suggestions.`);
+            // Fallback to default suggestions after max retries
+            return { 
+              suggestions: [
+                { name: "Default: Quick Sketch", description: "Doodle something for 5 mins. No pressure, just vibes.", hasNeuroBoost: true },
+                { name: "Default: Gratitude Moment", description: "Think of one thing you're grateful for today.", hasNeuroBoost: false },
+              ]
+            };
           }
         } else {
-          throw error; // Re-throw immediately for non-retryable errors
+           // For non-retryable errors, provide a fallback immediately.
+           console.error("Non-retryable error in taskSuggestionsFlow. Providing fallback.");
+           return { 
+            suggestions: [
+              { name: "Fallback: Hydration Check", description: "Sip some water, stay hydrated, queen/king!", hasNeuroBoost: false },
+              { name: "Fallback: Screen Break", description: "Look away from your screen for 2 mins. Your eyes will thank you.", hasNeuroBoost: false },
+            ]
+          };
         }
       }
     }
-    // This part should ideally not be reached if maxAttempts are exhausted and error is re-thrown.
-    // Providing a fallback if loop finishes without returning/throwing.
+    // This part should ideally not be reached if maxAttempts are exhausted and error is re-thrown or fallback provided.
+    // Providing a final fallback if loop finishes without returning/throwing.
     console.error("Task suggestions flow exhausted attempts or had an unexpected exit.");
     return { 
       suggestions: [
-        { name: "Default: Mindful Moment", description: "Take 5 minutes for yourself.", hasNeuroBoost: true },
+        { name: "Ultimate Fallback: Vibe Check", description: "Take a deep breath. You're doing great!", hasNeuroBoost: true },
       ]
     };
   }
 );
-
