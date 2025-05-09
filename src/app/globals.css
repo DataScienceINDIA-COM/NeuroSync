@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+@import 'firebaseui/dist/firebaseui.css'; /* Add this line */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -117,3 +118,77 @@
   }
 }
 
+/* Custom styles for FirebaseUI to better match ShadCN theme */
+.firebaseui-container {
+  font-family: var(--font-geist-sans) !important; /* Use app's font */
+}
+
+.firebaseui-card-header {
+  text-align: center !important;
+  font-size: 1.5rem !important; /* 24px */
+  font-weight: 600 !important;
+  color: hsl(var(--primary)) !important;
+}
+
+.firebaseui-idp-button, .firebaseui-button {
+  font-family: var(--font-geist-sans) !important;
+  border-radius: var(--radius) !important; /* Use ShadCN radius */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+  transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out !important;
+}
+
+.firebaseui-idp-button {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+.firebaseui-idp-button:hover {
+  background-color: hsl(var(--muted)) !important;
+   box-shadow: 0 4px 8px rgba(0,0,0,0.15) !important;
+}
+
+
+.firebaseui-button.firebaseui-id-submit {
+  background-color: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+}
+.firebaseui-button.firebaseui-id-submit:hover {
+  background-color: hsl(var(--primary) / 0.9) !important;
+}
+
+.firebaseui-input, .firebaseui-input-invalid {
+  font-family: var(--font-geist-sans) !important;
+  border: 1px solid hsl(var(--input)) !important;
+  border-radius: var(--radius) !important;
+  padding: 0.5rem 0.75rem !important; /* 8px 12px */
+  background-color: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+.firebaseui-input:focus, .firebaseui-input-invalid:focus {
+  border-color: hsl(var(--ring)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.5) !important; /* Simulate ring */
+}
+.firebaseui-input-invalid {
+   border-color: hsl(var(--destructive)) !important;
+}
+.firebaseui-error {
+  color: hsl(var(--destructive)) !important;
+  font-size: 0.875rem !important; /* 14px */
+}
+
+.firebaseui-link {
+  color: hsl(var(--primary)) !important;
+}
+.firebaseui-link:hover {
+  color: hsl(var(--primary) / 0.8) !important;
+}
+
+.firebaseui-card-content {
+  padding-top: 1.5rem !important; /* 24px */
+  padding-bottom: 1.5rem !important;
+}
+
+.firebaseui-text.firebaseui-tos {
+  font-size: 0.75rem !important; /* 12px */
+  color: hsl(var(--muted-foreground)) !important;
+}

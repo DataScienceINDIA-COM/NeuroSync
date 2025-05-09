@@ -38,7 +38,8 @@ import { requestNotificationPermission, onMessageListener } from '@/lib/firebase
 import { cn } from "@/lib/utils";
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
-import { signInWithGoogle, signOutUser } from '@/services/authService'; 
+import { signOutUser } from '@/services/authService'; // signInWithGoogle removed
+import FirebaseUIWidget from '@/components/auth/FirebaseUIWidget'; // Import FirebaseUIWidget
 
 
 const LOCAL_STORAGE_KEY_TASKS_PREFIX = "vibeCheckTasks_";
@@ -165,23 +166,6 @@ function MainAppInterface() {
     }
   }, [isClient, taskService, appUser, tasks.length]);
 
-
-  const handleGoogleSignIn = async () => {
-    const result = await signInWithGoogle(); // From authService
-    if (result.success) {
-      toast({
-        title: "Signed In! 🎉",
-        description: "You're logged in with Google. Let's vibe!",
-      });
-      // AuthContext handles AppUser creation/loading and setting it in UserContext
-    } else {
-      toast({
-        title: "Sign-In Hiccup 😬",
-        description: `Couldn't sign you in: ${result.message || 'Unknown error'}. Try again?`,
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleFirebaseSignOutInternal = async () => {
     const result = await signOutUser(); // From authService
@@ -318,11 +302,13 @@ function MainAppInterface() {
         if (suggestedTaskDetails && suggestedTaskDetails.suggestions) {
           const newTasksPromises = suggestedTaskDetails.suggestions.map(async (taskDetail) => {
             if(!taskService || !appUser) return null;
+            // Assuming taskDetail from getTaskSuggestions now includes all necessary fields
+            // or that createTask will calculate rewardPoints if not provided.
             return taskService.createTask({ 
               name: taskDetail.name,
               description: taskDetail.description,
               hasNeuroBoost: taskDetail.hasNeuroBoost,
-              // rewardPoints: taskDetail.rewardPoints, // Assuming AI flow returns this
+              rewardPoints: taskDetail.rewardPoints, // Ensure this is part of SuggestedTask
             });
           });
           const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
@@ -379,7 +365,6 @@ function MainAppInterface() {
       <Header>
         <Header.AuthSection
           authUser={authUser} // Pass Firebase auth user
-          onSignIn={handleGoogleSignIn}
           onSignOut={handleFirebaseSignOutInternal}
         />
       </Header>
@@ -573,21 +558,6 @@ function AppPageLogic() {
   const { user: appUser } = useAppUser();
   const { toast } = useToast(); // Access toast for guest sign-in
 
-  const handleGoogleSignIn = async () => {
-    const result = await signInWithGoogle();
-    if (result.success) {
-      toast({
-        title: "Signed In! 🎉",
-        description: "You're logged in with Google. Let's vibe!",
-      });
-    } else {
-      toast({
-        title: "Sign-In Hiccup 😬",
-        description: `Couldn't sign you in: ${result.message || 'Unknown error'}. Try again?`,
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleGuestSignIn = () => {
     // AuthContext will handle creating/loading a guest user if no authUser is present after a sign-out
@@ -625,27 +595,34 @@ function AppPageLogic() {
     );
   }
   
-  // If appUser is a guest and no Firebase authUser, show SignIn page
-  // Or if there's an authUser but for some reason appUser isn't fully aligning (e.g. id mismatch, though AuthContext should prevent this)
-  // The primary check is: if the appUser is a guest, show sign-in.
+  // If appUser is a guest, show sign-in page with FirebaseUIWidget
   if (appUser.id.startsWith('guest_')) {
      return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
-        <div className="text-center space-y-6">
+        <div className="text-center space-y-6 w-full max-w-md p-8 bg-card shadow-xl rounded-2xl border border-border">
             <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" />
             <h1 className="text-4xl font-extrabold text-primary drop-shadow-md">Welcome to Vibe Check!</h1>
-            <p className="text-lg text-muted-foreground max-w-md mx-auto">
+            <p className="text-lg text-muted-foreground">
                 Your personal space to track moods, smash quests, and ride the good vibes.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button onClick={handleGoogleSignIn} className="text-lg py-3 px-6 shadow-lg hover:shadow-xl transition-all bg-primary hover:bg-primary/90">
-                    <svg className="mr-2 -ml-1 w-5 h-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
-                    Sign In with Google
-                </Button>
-                 <Button onClick={handleGuestSignIn} variant="outline" className="text-lg py-3 px-6 shadow-md hover:shadow-lg">
-                    <UserIcon className="mr-2 h-5 w-5" /> Or Continue as Guest
-                </Button>
+            
+            <FirebaseUIWidget />
+
+            <div className="relative my-6">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  Or
+                </span>
+              </div>
             </div>
+
+            <Button onClick={handleGuestSignIn} variant="outline" className="w-full text-lg py-3 shadow-md hover:shadow-lg">
+                <UserIcon className="mr-2 h-5 w-5" /> Continue as Guest
+            </Button>
+
              <p className="text-xs text-muted-foreground mt-6">
                 By continuing, you agree to our imaginary Terms of Service and Privacy Policy.
             </p>
