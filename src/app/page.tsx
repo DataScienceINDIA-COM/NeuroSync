@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -19,7 +18,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
 import TaskService from "@/components/task/TaskService";
-import type { Task as AppTask } from "@/types/task"; // Renamed to avoid conflict
+import type { Task as AppTask } from "@/types/task"; 
 import type { Hormone } from "@/types/hormone";
 import type { Reward } from "@/types/reward";
 import RewardDisplay from "@/components/rewards/RewardDisplay";
@@ -29,7 +28,7 @@ import type { User as AppUser } from "@/types/user";
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Edit3, Brain, Zap, CheckCircle2, Wand2, ImagePlus, Loader2, Sparkles, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut } from "lucide-react";
+import { Edit3, Brain, Zap, CheckCircle2, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow"; 
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
@@ -48,11 +47,10 @@ const LOCAL_STORAGE_KEY_REWARDS_PREFIX = "vibeCheckRewards_";
 const LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX = "vibeCheckNeuroPoints_";
 
 
-function HomePageContent() {
+function MainAppInterface() {
   const { moodLogs, handleLogMood: contextHandleLogMood } = useMoodLogs();
-  const { user: authUser, loading: authLoading } = useAuth();
+  const { user: authUser } = useAuth(); 
   const { user: appUser, setUser: setAppUser } = useAppUser(); 
-
 
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
@@ -64,68 +62,55 @@ function HomePageContent() {
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
 
-  const getLocalStorageKey = (prefix: string) => authUser ? `${prefix}${authUser.uid}` : `${prefix}guest`;
+  const getLocalStorageKey = (prefix: string, userId?: string) => {
+    if (!userId) { // Fallback if appUser.id is somehow not available yet
+        return `${prefix}guest_fallback`; 
+    }
+    if (userId.startsWith('guest_')) return `${prefix}guest`;
+    return `${prefix}${userId}`;
+  };
 
 
   useEffect(() => {
-    setIsClient(true); // This should be at the top-level of the component or a higher-level context.
-                      // For now, keeping it here for simplicity of the fix.
+    setIsClient(true); 
   }, []);
 
   useEffect(() => {
-    if (!isClient) return;
+    if (!isClient || !appUser) return;
 
-    if (authUser && appUser) {
-        // User is logged in, load their specific data
-        const userTasksKey = getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX);
-        const storedTasks = localStorage.getItem(userTasksKey);
-        if (storedTasks) setTasks(JSON.parse(storedTasks));
-        else setTasks([]); // Or initialize with default tasks for new authenticated user
-        
-        const userRewardsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX);
-        const storedRewards = localStorage.getItem(userRewardsKey);
-        if (storedRewards) setRewards(JSON.parse(storedRewards));
-        else setRewards([ /* default rewards for authenticated user */
-            { id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
-            { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" },
-        ]);
+    const userSpecificId = appUser.id;
 
-        const userPointsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX);
-        const storedPoints = localStorage.getItem(userPointsKey);
-        if (storedPoints) setNeuroPoints(JSON.parse(storedPoints));
-        else setNeuroPoints(0);
+    const tasksKey = getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX, userSpecificId);
+    const storedTasks = localStorage.getItem(tasksKey);
+    if (storedTasks) setTasks(JSON.parse(storedTasks));
+    else setTasks([]);
+    
+    const rewardsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX, userSpecificId);
+    const storedRewards = localStorage.getItem(rewardsKey);
+    if (storedRewards) setRewards(JSON.parse(storedRewards));
+    else setRewards(userSpecificId.startsWith('guest_') ? 
+        [{ id: generateId(), name: "Quick Vibe Boost (Guest)", description: "A little something for our guest!", pointsRequired: 20, isUnlocked: false, type: "virtual" }]
+        :
+        [{ id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
+         { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" }]
+    );
+    
+    const pointsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX, userSpecificId);
+    const storedPoints = localStorage.getItem(pointsKey);
+    if (storedPoints) setNeuroPoints(JSON.parse(storedPoints));
+    else setNeuroPoints(0);
 
-    } else if (!authUser && appUser && appUser.id.startsWith('guest_')) {
-        // Guest user (appUser exists and ID indicates guest)
-        const guestTasksKey = getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX); // Will resolve to prefix + "guest"
-        const storedTasks = localStorage.getItem(guestTasksKey);
-        if (storedTasks) setTasks(JSON.parse(storedTasks)); else setTasks([]);
-
-        const guestRewardsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX);
-        const storedRewards = localStorage.getItem(guestRewardsKey);
-        if (storedRewards) setRewards(JSON.parse(storedRewards)); else setRewards([/* default guest rewards */
-            { id: generateId(), name: "Quick Vibe Boost", description: "A little something for our guest!", pointsRequired: 20, isUnlocked: false, type: "virtual" },
-        ]);
-        
-        const guestPointsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX);
-        const storedPoints = localStorage.getItem(guestPointsKey);
-        if (storedPoints) setNeuroPoints(JSON.parse(storedPoints)); else setNeuroPoints(0);
-    } else {
-        // No authUser and no guest appUser (or appUser not loaded yet), clear or set to initial state
-        setTasks([]);
-        setRewards([]);
-        setNeuroPoints(0);
-    }
-  }, [isClient, authUser, appUser]);
+  }, [isClient, appUser]);
 
 
   useEffect(() => {
-    if (isClient && appUser) { // Save data if appUser exists (either logged in or guest)
-      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX), JSON.stringify(tasks));
-      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX), JSON.stringify(rewards));
-      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX), JSON.stringify(neuroPoints));
+    if (isClient && appUser) { 
+      const userSpecificId = appUser.id;
+      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX, userSpecificId), JSON.stringify(tasks));
+      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX, userSpecificId), JSON.stringify(rewards));
+      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX, userSpecificId), JSON.stringify(neuroPoints));
     }
-  }, [tasks, rewards, neuroPoints, isClient, appUser, authUser]); // authUser dependency ensures key changes on login/logout
+  }, [tasks, rewards, neuroPoints, isClient, appUser]); 
 
 
   const taskService = useMemo(() => {
@@ -135,7 +120,7 @@ function HomePageContent() {
 
 
   useEffect(() => {
-    if (isClient && authUser && appUser && setAppUser) { // Ensure setAppUser is available from useAppUser
+    if (isClient && authUser && appUser && setAppUser) { 
       requestNotificationPermission().then(async token => {
         if (token) {
           const result = await storeUserFCMToken(authUser.uid, token);
@@ -186,14 +171,11 @@ function HomePageContent() {
         return;
     }
     try {
-      // Before signing in, if there's guest data, consider migrating or clearing it.
-      // For now, AuthContext handles creating a new appUser profile or loading existing for the UID.
       await signInWithPopup(auth, googleAuthProvider);
       toast({
         title: "Signed In! 🎉",
         description: "You're logged in with Google. Let's vibe!",
       });
-      // Data loading for the new authUser will be handled by useEffect dependent on authUser.
     } catch (error: any) {
       console.error("Google Sign-In Error:", error);
       toast({
@@ -211,8 +193,6 @@ function HomePageContent() {
     }
     try {
       await firebaseLibSignOut(auth); 
-      // AuthContext will update authUser to null.
-      // useEffect dependent on authUser will then handle guest data loading.
       toast({
         title: "Signed Out! 👋",
         description: "You've successfully signed out. Catch ya later!",
@@ -275,7 +255,8 @@ function HomePageContent() {
   };
 
   const handleGenerateAvatar = async () => {
-    if (!authUser || !appUser || !setAppUser) return; // Need authUser for UID
+    if (!appUser || !setAppUser) return; 
+     // Allow avatar generation for guests too, using appUser.id
     if (avatarDescription.trim().length < 10) {
       toast({ title: "Yo, Hold Up! 🧐", description: "Your avatar prompt needs a bit more spice! At least 10 chars, fam.", variant: "destructive" });
       return;
@@ -283,7 +264,7 @@ function HomePageContent() {
     setIsGeneratingAvatar(true);
     try {
       const result = await generateAvatar({ 
-        userId: authUser.uid, 
+        userId: appUser.id, // Use appUser.id, works for guests and auth users
         description: avatarDescription,
         previousAvatarPath: appUser.avatar?.imagePath 
       });
@@ -310,8 +291,8 @@ function HomePageContent() {
   };
 
   const handleSendTestNotification = async () => {
-    if (!authUser || !appUser?.fcmToken) {
-      toast({ title: "Can't Send Push! 🚧", description: "Enable notifications or check your settings, bestie.", variant: "destructive" });
+    if (!authUser || !appUser?.fcmToken) { // Test notifications only for authenticated users with tokens
+      toast({ title: "Can't Send Push! 🚧", description: "This is for logged-in users with notifications enabled.", variant: "destructive" });
       return;
     }
     setIsSendingNotification(true);
@@ -365,63 +346,17 @@ function HomePageContent() {
        fetchTaskSuggestions();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, taskService, appUser, moodLogs]); // tasks.length removed to re-fetch if moodLogs change
-
-  if (authLoading || !appUser) { // Show loading if auth is loading OR appUser is not yet initialized
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
-        <Loader2 className="h-12 w-12 animate-spin text-accent" />
-        <p className="text-lg ml-4 text-accent font-semibold">Checking your Vibe ID... ✨</p>
-      </div>
-    );
-  }
-
-  if (!authUser) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
-        <Card className="p-8 shadow-xl border-accent w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <Sparkles className="h-16 w-16 text-accent" />
-            </div>
-            <CardTitle className="text-3xl font-bold text-primary">Vibe Check</CardTitle>
-            <CardDescription className="text-muted-foreground mt-2">
-              Sign in to unlock your personalized wellness journey. <br /> It&apos;s about to get real.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="mt-6">
-            <Button onClick={handleGoogleSignIn} className="w-full text-lg py-3 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all">
-              <svg className="mr-2 -ml-1 w-6 h-6" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
-              Sign In with Google
-            </Button>
-          </CardContent>
-           <CardFooter className="text-xs text-muted-foreground mt-4 text-center">
-            By signing in, you agree to our totally chill Terms of Service and Privacy Policy.
-          </CardFooter>
-        </Card>
-         {appUser && appUser.id.startsWith('guest_') && ( // Show guest content if appUser is a guest
-          <div className="mt-8 text-center">
-            <p className="text-muted-foreground">Or continue exploring as a guest.</p>
-            {/* Add a button or link to proceed as guest if desired, or automatically show guest content */}
-          </div>
-        )}
-      </div>
-    );
-  }
-  
-  // If authUser exists, but appUser is somehow still null (shouldn't happen with AuthContext logic), show loading.
-  if (!appUser) {
-      return (
-        <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
-            <Loader2 className="h-12 w-12 animate-spin text-accent" />
-            <p className="text-lg ml-4 text-accent font-semibold">Loading your profile... 🤳</p>
-        </div>
-        );
-  }
+  }, [isClient, taskService, appUser, moodLogs]); 
   
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header />
+      <Header>
+        <Header.AuthSection
+          authUser={authUser}
+          onSignIn={handleGoogleSignIn}
+          onSignOut={handleFirebaseSignOutInternal}
+        />
+      </Header>
       <main className="flex-grow container mx-auto p-4 md:p-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
 
@@ -430,14 +365,10 @@ function HomePageContent() {
               <CardHeader className="flex flex-col gap-2">
                 <div className="flex flex-row items-center justify-between">
                   <CardTitle className="drop-shadow-sm font-extrabold text-2xl text-primary">My Vibe</CardTitle>
-                  <div className="flex items-center">
-                    <Button variant="ghost" size="icon" onClick={() => alert("Profile edit finna drop!")}  className="mr-1">
-                        <Edit3 className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={handleFirebaseSignOutInternal} className="shadow-sm hover:shadow">
-                      <LogOut className="mr-2 h-4 w-4" /> Sign Out
-                    </Button>
-                  </div>
+                  {/* Profile edit button (optional, kept from original) */}
+                  <Button variant="ghost" size="icon" onClick={() => toast({title: "Profile Edit Soon!", description:"This feature is cookin'!"})}  className="mr-1">
+                      <Edit3 className="h-4 w-4" />
+                  </Button>
                 </div>
                 <CardDescription className="text-muted-foreground">
                   Track your journey and glow up, bestie! ✨
@@ -445,10 +376,10 @@ function HomePageContent() {
               </CardHeader>
               <CardContent className="flex flex-col items-center space-y-3 ">
                 <AvatarDisplay 
-                  avatar={appUser?.avatar || (authUser.photoURL ? {id: authUser.uid, name: authUser.displayName || '', description: 'User Avatar', imageUrl: authUser.photoURL} : null)} 
+                  avatar={appUser?.avatar || null} // Pass appUser's avatar
                   size={100} 
                 />
-                <h2 className="text-2xl font-bold tracking-tight text-center">{appUser?.name || authUser.displayName || "Vibe User"}</h2>
+                <h2 className="text-2xl font-bold tracking-tight text-center">{appUser?.name || "Vibe User"}</h2>
                 <p className="text-sm text-muted-foreground">Streak: {appUser?.streak || 0} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
                 <p className="text-3xl font-extrabold text-primary drop-shadow-md">VibePoints: {neuroPoints} VP</p>
                 <div className="w-full text-center">
@@ -460,7 +391,7 @@ function HomePageContent() {
                 </div>
               </CardContent>
               <CardContent className="flex justify-center">
-                {appUser?.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
+                {authUser && appUser?.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
               </CardContent>
             </Card>
 
@@ -484,7 +415,7 @@ function HomePageContent() {
                 />
                 <Button
                   onClick={handleGenerateAvatar}
-                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || !authUser}
+                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 }
                   className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
                   {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
@@ -523,7 +454,7 @@ function HomePageContent() {
                   <CardDescription className="text-muted-foreground">Peep what your brain's cookin' up, bestie.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div><Sparkles className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
+                  <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
                   <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
                   <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500"><path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span></div>
                   <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span></div>
@@ -595,12 +526,27 @@ function HomePageContent() {
   );
 }
 
-export default function Page() {
+function AppPageLogic() { 
+  const { loading: authLoading } = useAuth();
+  const { user: appUser } = useAppUser();
+
+  if (authLoading || !appUser) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
+        <Loader2 className="h-12 w-12 animate-spin text-accent" />
+        <p className="text-lg ml-4 text-accent font-semibold">Checking your Vibe ID... ✨</p>
+      </div>
+    );
+  }
+  return <MainAppInterface />;
+}
+
+export default function RootPage() { 
   return (
     <AppUserProvider> 
       <AuthContextProvider> 
         <MoodLogsProvider>
-          <HomePageContent />
+          <AppPageLogic />
         </MoodLogsProvider>
       </AuthContextProvider>
     </AppUserProvider>
