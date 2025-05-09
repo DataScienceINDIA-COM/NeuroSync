@@ -13,29 +13,38 @@ const firebaseConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  locationId: process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID, 
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  // locationId is not a standard Firebase client config property, removing it or ensuring it's for Functions if needed.
+  // For functions, it's usually passed when calling getFunctions.
 };
 
+// Check for essential configuration variables
 const apiKeyMissing = !firebaseConfig.apiKey || typeof firebaseConfig.apiKey !== 'string' || firebaseConfig.apiKey.trim() === '';
 const projectIdMissing = !firebaseConfig.projectId || typeof firebaseConfig.projectId !== 'string' || firebaseConfig.projectId.trim() === '';
+const authDomainMissing = !firebaseConfig.authDomain || typeof firebaseConfig.authDomain !== 'string' || firebaseConfig.authDomain.trim() === '';
 
-if (apiKeyMissing || projectIdMissing) {
-  let missingVarsMessageParts = [];
+
+if (apiKeyMissing || projectIdMissing || authDomainMissing) {
+  const missingVars: string[] = [];
   if (apiKeyMissing) {
-    missingVarsMessageParts.push(`NEXT_PUBLIC_FIREBASE_API_KEY (current value: '${firebaseConfig.apiKey === undefined ? "undefined" : firebaseConfig.apiKey}')`);
+    missingVars.push(`NEXT_PUBLIC_FIREBASE_API_KEY (current value: '${firebaseConfig.apiKey === undefined ? "undefined" : firebaseConfig.apiKey}')`);
   }
   if (projectIdMissing) {
-    missingVarsMessageParts.push(`NEXT_PUBLIC_FIREBASE_PROJECT_ID (current value: '${firebaseConfig.projectId === undefined ? "undefined" : firebaseConfig.projectId}')`);
+    missingVars.push(`NEXT_PUBLIC_FIREBASE_PROJECT_ID (current value: '${firebaseConfig.projectId === undefined ? "undefined" : firebaseConfig.projectId}')`);
+  }
+  if (authDomainMissing) {
+    missingVars.push(`NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN (current value: '${firebaseConfig.authDomain === undefined ? "undefined" : firebaseConfig.authDomain}')`);
   }
 
   const errorMessage = `CRITICAL: Firebase configuration error. The following environment variable(s) are missing, empty, or invalid: 
-${missingVarsMessageParts.join('\n')}
+${missingVars.join('\n')}
 Please ensure these are correctly set in your .env.local file (or .env if you are not using .local).
 Refer to your Firebase project settings (Project settings > General > Your apps > Firebase SDK snippet) to get these values.
+Also, ensure Authentication providers (e.g., Google, Email/Password) are enabled in your Firebase project console (Authentication > Sign-in method).
 IMPORTANT: You MUST restart your development server (e.g., 'npm run dev') after updating environment variables.`;
   console.error(errorMessage);
+  // Stop execution if essential Firebase config is missing to make the issue unmissable.
   throw new Error(errorMessage);
 }
 
@@ -58,7 +67,9 @@ try {
   db = getFirestore(app);
   auth = getAuth(app);
   storage = getStorage(app);
-  functions = getFunctions(app, firebaseConfig.locationId || undefined);
+  // Pass region to getFunctions if process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID is defined
+  const region = process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID;
+  functions = getFunctions(app, region || undefined); // Use region if available
   database = getDatabase(app);
 
   if (typeof window !== 'undefined') {
@@ -69,8 +80,9 @@ try {
     });
   }
 } catch (error: any) {
-  console.error('Error initializing Firebase services:', error.message);
-  throw new Error(`Firebase service initialization failed: ${error.message || error.toString()}`);
+  console.error('Error initializing Firebase services:', error.message, firebaseConfig);
+  // Add more context to the error, perhaps stringify the config to see what was passed
+  throw new Error(`Firebase service initialization failed: ${error.message || error.toString()}. Config used: ${JSON.stringify(firebaseConfig)}`);
 }
 
 const handleSignOut = async (): Promise<void> => {
@@ -87,91 +99,9 @@ const handleSignOut = async (): Promise<void> => {
   }
 };
 
-const uploadFile = async (file: File, path: string) => {
-  if (!storage) {
-    throw new Error("Firebase Storage is not initialized.");
-  }
-  const { ref, uploadBytesResumable } = await import('firebase/storage');
-
-  const storageRef = ref(storage, path);
-  const uploadTask = uploadBytesResumable(storageRef, file);
-  return new Promise((resolve, reject) => {
-    uploadTask.on('state_changed',
-      (snapshot) => {},
-      (error) => {
-        console.error('Error uploading file:', error);
-        reject(error);
-      },
-      () => {
-        resolve(uploadTask.snapshot.ref);
-      }
-    );
-  });
-};
-
-const downloadFile = async (path: string) => {
-  if (!storage) {
-    throw new Error("Firebase Storage is not initialized.");
-  }
-  const { ref, getDownloadURL } = await import('firebase/storage');
-
-  try {
-    const storageRef = ref(storage, path);
-    return await getDownloadURL(storageRef);
-  } catch (error) {
-    console.error('Error getting download URL:', error);
-    throw error;
-  }
-};
-
-const callFunction = async (name: string, data: any) => {
-  if (!functions) {
-    throw new Error("Firebase Functions is not initialized.");
-  }
-  try {
-    const callable = httpsCallable(functions, name);
-    const result = await callable(data);
-    return result.data;
-  } catch (error) {
-    console.error(`Error calling function ${name}:`, error);
-    throw error;
-  }
-};
-
-const readFromDatabase = async (path: string) => {
-  if (!database) {
-    throw new Error("Firebase Realtime Database is not initialized.");
-  }
-  const dbRef = databaseRef(database, path);
-  try {
-    const snapshot = await get(dbRef);
-    if (snapshot.exists()) {
-      return snapshot.val();
-    } else {
-      console.log("No data available for path:", path);
-      return null;
-    }
-  } catch (error) {
-    console.error('Error reading from database:', error);
-    throw error;
-  }
-};
-
-const writeToDatabase = async (path: string, data: any) => {
-  if (!database) {
-    throw new Error("Firebase Realtime Database is not initialized.");
-  }
-  const dbRef = databaseRef(database, path);
-  try {
-    await set(dbRef, data);
-    console.log(`Data written successfully to ${path}`);
-  } catch (error) {
-    console.error(`Error writing to database at ${path}:`, error);
-    throw error;
-  }
-};
-
+// Removed unused 'uploadFile', 'downloadFile', 'callFunction', 'readFromDatabase', 'writeToDatabase'
+// These were not being used and can be added back if needed, with proper imports from 'firebase/storage' etc.
 
 const googleAuthProvider = new GoogleAuthProvider();
 
-export { app, db, auth, storage, functions, database, analytics, googleAuthProvider, handleSignOut, uploadFile, downloadFile, callFunction, readFromDatabase, writeToDatabase };
+export { app, db, auth, storage, functions, database, analytics, googleAuthProvider, handleSignOut };
