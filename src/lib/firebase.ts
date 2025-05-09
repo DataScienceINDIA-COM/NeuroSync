@@ -7,43 +7,35 @@ import { getFunctions, httpsCallable, type Functions } from 'firebase/functions'
 import { getDatabase, ref as databaseRef, get, set, type Database } from 'firebase/database';
 import { getAnalytics, type Analytics, isSupported } from 'firebase/analytics';
 
-// IMPORTANT: Replace with your app's actual Firebase project configuration
-// This configuration expects environment variables to be set in your .env file.
-// Example .env content:
-// NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
-// NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
-// NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
-// ... and so on for other config values.
-
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  locationId: process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID, // Optional: For specific Cloud Functions region
+  locationId: process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID, 
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-// Critical check for essential Firebase configuration
 const apiKeyMissing = !firebaseConfig.apiKey || typeof firebaseConfig.apiKey !== 'string' || firebaseConfig.apiKey.trim() === '';
 const projectIdMissing = !firebaseConfig.projectId || typeof firebaseConfig.projectId !== 'string' || firebaseConfig.projectId.trim() === '';
 
 if (apiKeyMissing || projectIdMissing) {
-  let missingVarsMessage = [];
+  let missingVarsMessageParts = [];
   if (apiKeyMissing) {
-    missingVarsMessage.push(`NEXT_PUBLIC_FIREBASE_API_KEY (current value: '${firebaseConfig.apiKey === undefined ? "undefined" : firebaseConfig.apiKey}')`);
+    missingVarsMessageParts.push(`NEXT_PUBLIC_FIREBASE_API_KEY (current value: '${firebaseConfig.apiKey === undefined ? "undefined" : firebaseConfig.apiKey}')`);
   }
   if (projectIdMissing) {
-    missingVarsMessage.push(`NEXT_PUBLIC_FIREBASE_PROJECT_ID (current value: '${firebaseConfig.projectId === undefined ? "undefined" : firebaseConfig.projectId}')`);
+    missingVarsMessageParts.push(`NEXT_PUBLIC_FIREBASE_PROJECT_ID (current value: '${firebaseConfig.projectId === undefined ? "undefined" : firebaseConfig.projectId}')`);
   }
 
-  const errorMessage = `CRITICAL: Firebase configuration error. The following environment variable(s) are missing, empty, or invalid: ${missingVarsMessage.join(' and ')}.
-Please ensure these are correctly set in your .env file and are valid strings.
-Refer to Firebase project settings to get these values. You might need to restart your development server after updating the .env file.`;
+  const errorMessage = `CRITICAL: Firebase configuration error. The following environment variable(s) are missing, empty, or invalid: 
+${missingVarsMessageParts.join('\n')}
+Please ensure these are correctly set in your .env.local file (or .env if you are not using .local).
+Refer to your Firebase project settings (Project settings > General > Your apps > Firebase SDK snippet) to get these values.
+IMPORTANT: You MUST restart your development server (e.g., 'npm run dev') after updating environment variables.`;
   console.error(errorMessage);
-  // Stop execution if essential Firebase config is missing to make the issue unmissable.
   throw new Error(errorMessage);
 }
 
@@ -66,7 +58,6 @@ try {
   db = getFirestore(app);
   auth = getAuth(app);
   storage = getStorage(app);
-  // Pass undefined to getFunctions if locationId is not set, allowing it to use the default region.
   functions = getFunctions(app, firebaseConfig.locationId || undefined);
   database = getDatabase(app);
 
@@ -79,12 +70,9 @@ try {
   }
 } catch (error: any) {
   console.error('Error initializing Firebase services:', error.message);
-  // If initialization fails even after config check, re-throw to make it clear Firebase is not usable.
   throw new Error(`Firebase service initialization failed: ${error.message || error.toString()}`);
 }
 
-
-// Function to handle Firebase sign out
 const handleSignOut = async (): Promise<void> => {
   try {
     if (auth) {
@@ -95,11 +83,10 @@ const handleSignOut = async (): Promise<void> => {
     }
   } catch (error: any) {
     console.error('Error signing out:', error.message);
-    throw error; // Re-throw the error to be handled by the caller
+    throw error; 
   }
 };
 
-// Function to upload file to Firebase Storage
 const uploadFile = async (file: File, path: string) => {
   if (!storage) {
     throw new Error("Firebase Storage is not initialized.");
@@ -110,9 +97,7 @@ const uploadFile = async (file: File, path: string) => {
   const uploadTask = uploadBytesResumable(storageRef, file);
   return new Promise((resolve, reject) => {
     uploadTask.on('state_changed',
-      (snapshot) => {
-        // progress can be tracked here if needed
-      },
+      (snapshot) => {},
       (error) => {
         console.error('Error uploading file:', error);
         reject(error);
@@ -124,7 +109,6 @@ const uploadFile = async (file: File, path: string) => {
   });
 };
 
-// Function to download a file from Firebase Storage
 const downloadFile = async (path: string) => {
   if (!storage) {
     throw new Error("Firebase Storage is not initialized.");
@@ -140,7 +124,6 @@ const downloadFile = async (path: string) => {
   }
 };
 
-// Function to call Firebase Cloud Functions
 const callFunction = async (name: string, data: any) => {
   if (!functions) {
     throw new Error("Firebase Functions is not initialized.");
@@ -155,7 +138,6 @@ const callFunction = async (name: string, data: any) => {
   }
 };
 
-// Function to interact with Firebase Realtime Database
 const readFromDatabase = async (path: string) => {
   if (!database) {
     throw new Error("Firebase Realtime Database is not initialized.");
@@ -175,7 +157,6 @@ const readFromDatabase = async (path: string) => {
   }
 };
 
-// Function to write to Firebase Realtime Database
 const writeToDatabase = async (path: string, data: any) => {
   if (!database) {
     throw new Error("Firebase Realtime Database is not initialized.");

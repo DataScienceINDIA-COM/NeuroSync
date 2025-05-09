@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { User as FirebaseUser } from 'firebase/auth';
@@ -5,26 +6,28 @@ import { onAuthStateChanged } from 'firebase/auth';
 import type { ReactNode} from 'react';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase';
-import type { User as AppUser } from '@/types/user'; // App specific user
-import { useUser as useAppUser } from '@/contexts/UserContext'; // App specific user context
+import type { User as AppUser } from '@/types/user'; 
+import { useUser as useAppUser } from '@/contexts/UserContext'; 
 import { generateId } from '@/lib/utils';
 import { getRandomHormone } from '@/ai/hormone-prediction';
 
 interface AuthContextType {
-  user: FirebaseUser | null; // Firebase auth user
+  user: FirebaseUser | null; 
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [authUser, setAuthUser] = useState<FirebaseUser | null>(null); // Renamed to authUser to avoid confusion
+  const [authUser, setAuthUser] = useState<FirebaseUser | null>(null); 
   const [loading, setLoading] = useState(true);
-  const { setUser: setAppUser, user: currentAppUser } = useAppUser(); // currentAppUser is the AppUser from UserContext
+  const { setUser: setAppUser } = useAppUser(); 
+
+  console.log("AuthContextProvider: Initializing. Loading state:", loading);
 
   const createNewAppUser = (firebaseUser: FirebaseUser | null, isGuest = false): AppUser => {
-    const userId = isGuest ? 'guest_' + generateId() : firebaseUser?.uid || generateId(); // Fallback for safety
-    const userName = isGuest ? "Vibe Explorer" : firebaseUser?.displayName || "Vibe User"; // Simplified guest name
+    const userId = isGuest ? 'guest_' + generateId() : firebaseUser?.uid || generateId(); 
+    const userName = isGuest ? "Vibe Explorer" : firebaseUser?.displayName || "Vibe User"; 
     const avatarUrl = isGuest ? `https://picsum.photos/seed/${userId}/100/100` : firebaseUser?.photoURL || `https://picsum.photos/seed/${userId}/100/100`;
     
     const newProfile: AppUser = {
@@ -39,31 +42,33 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         name: "Avatar",
         description: "User's Avatar",
         imageUrl: avatarUrl,
-        // imagePath will be populated if/when an AI avatar is generated
       },
       streak: 0,
-      moodLogs: [], // Initialize as empty array
-      fcmToken: undefined, // FCM token should be managed separately after login
+      moodLogs: [], 
+      fcmToken: undefined, 
     };
+    console.log(`AuthContextProvider: Created new AppUser profile (${isGuest ? 'Guest' : 'Authenticated'}):`, newProfile);
     return newProfile;
   };
 
   useEffect(() => {
+    console.log("AuthContextProvider: useEffect for onAuthStateChanged attaching listener.");
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setAuthUser(firebaseUser); // Set the Firebase auth user state
+      console.log("AuthContextProvider: onAuthStateChanged triggered. Firebase user:", firebaseUser ? firebaseUser.uid : 'null');
+      setAuthUser(firebaseUser); 
+
+      let appUserToSet: AppUser | null = null;
 
       if (firebaseUser) {
-        // User is signed in
+        console.log("AuthContextProvider: Firebase user detected (authenticated).");
         const userKey = `vibeCheckUser_${firebaseUser.uid}`;
         const storedAppUserString = localStorage.getItem(userKey);
-        let appUserToSet: AppUser | null = null;
 
         if (storedAppUserString) {
+          console.log(`AuthContextProvider: Found stored AppUser for UID ${firebaseUser.uid}.`);
           try {
             const parsedUser = JSON.parse(storedAppUserString) as AppUser;
-            // Basic validation: ensure essential fields exist
             if (parsedUser && parsedUser.id === firebaseUser.uid) {
-               // Ensure avatar has imagePath if imageUrl looks like a Firebase Storage URL
                 if (parsedUser.avatar && parsedUser.avatar.imageUrl && parsedUser.avatar.imageUrl.includes('firebasestorage.googleapis.com') && !parsedUser.avatar.imagePath) {
                     try {
                         const url = new URL(parsedUser.avatar.imageUrl);
@@ -71,57 +76,84 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
                         if (pathName.includes('/o/')) {
                             const objectPathEncoded = pathName.substring(pathName.indexOf('/o/') + 3);
                             parsedUser.avatar.imagePath = decodeURIComponent(objectPathEncoded);
+                            console.log("AuthContextProvider: Successfully parsed imagePath from avatar URL.");
                         }
                     } catch (e) {
-                        console.warn("Could not parse imagePath from avatar imageUrl during auth context load", e);
+                        console.warn("AuthContextProvider: Could not parse imagePath from avatar imageUrl during auth context load", e);
                     }
                 }
               appUserToSet = parsedUser;
+              console.log("AuthContextProvider: Loaded AppUser from localStorage:", appUserToSet);
             } else {
-              console.warn("Stored app user ID mismatch or invalid, creating new one.");
+              console.warn("AuthContextProvider: Stored AppUser ID mismatch or invalid. Creating new one.");
+              appUserToSet = createNewAppUser(firebaseUser, false);
             }
           } catch (e) {
-            console.error("Failed to parse stored app user, creating new one:", e);
+            console.error("AuthContextProvider: Failed to parse stored AppUser. Creating new one:", e);
+            appUserToSet = createNewAppUser(firebaseUser, false);
           }
-        }
-
-        if (!appUserToSet) {
+        } else {
+          console.log(`AuthContextProvider: No stored AppUser for UID ${firebaseUser.uid}. Creating new one.`);
           appUserToSet = createNewAppUser(firebaseUser, false);
-          localStorage.setItem(userKey, JSON.stringify(appUserToSet));
         }
-        setAppUser(appUserToSet);
+        
+        if (appUserToSet) {
+          localStorage.setItem(userKey, JSON.stringify(appUserToSet));
+          console.log(`AuthContextProvider: Saved AppUser for UID ${firebaseUser.uid} to localStorage.`);
+        }
 
       } else {
-        // User is signed out, set up guest user
+        console.log("AuthContextProvider: No Firebase user detected (guest or signed out).");
         const guestUserKey = 'vibeCheckUser_guest';
         const storedGuestUserString = localStorage.getItem(guestUserKey);
-        let guestUserToSet: AppUser | null = null;
-
+        
         if (storedGuestUserString) {
+          console.log("AuthContextProvider: Found stored guest AppUser.");
           try {
             const parsedGuestUser = JSON.parse(storedGuestUserString) as AppUser;
             if (parsedGuestUser && parsedGuestUser.id.startsWith('guest_')) {
-              guestUserToSet = parsedGuestUser;
+              appUserToSet = parsedGuestUser;
+              console.log("AuthContextProvider: Loaded guest AppUser from localStorage:", appUserToSet);
             } else {
-               console.warn("Stored guest user invalid, creating new one.");
+               console.warn("AuthContextProvider: Stored guest AppUser invalid. Creating new one.");
+               appUserToSet = createNewAppUser(null, true);
             }
           } catch (e) {
-            console.error("Failed to parse stored guest user, creating new one:", e);
+            console.error("AuthContextProvider: Failed to parse stored guest AppUser. Creating new one:", e);
+            appUserToSet = createNewAppUser(null, true);
           }
+        } else {
+          console.log("AuthContextProvider: No stored guest AppUser. Creating new one.");
+          appUserToSet = createNewAppUser(null, true);
         }
-        
-        if (!guestUserToSet) {
-          guestUserToSet = createNewAppUser(null, true);
-          localStorage.setItem(guestUserKey, JSON.stringify(guestUserToSet));
+
+        if (appUserToSet) {
+          localStorage.setItem(guestUserKey, JSON.stringify(appUserToSet));
+          console.log("AuthContextProvider: Saved guest AppUser to localStorage.");
         }
-        setAppUser(guestUserToSet);
       }
-      setLoading(false); // Auth check complete
+      
+      if (appUserToSet) {
+        setAppUser(appUserToSet);
+        console.log("AuthContextProvider: AppUser set in UserContext:", appUserToSet);
+      } else {
+        // This case should ideally not be reached if createNewAppUser always returns a valid user.
+        console.error("AuthContextProvider: Critical error - appUserToSet is null. This should not happen.");
+        // Fallback to a new guest user to prevent app from being totally broken if appUserToSet is null
+        const fallbackGuest = createNewAppUser(null, true);
+        setAppUser(fallbackGuest);
+        localStorage.setItem('vibeCheckUser_guest', JSON.stringify(fallbackGuest));
+         console.log("AuthContextProvider: Set fallback guest AppUser due to critical error.");
+      }
+
+      setLoading(false); 
+      console.log("AuthContextProvider: Auth check complete. Loading state set to false.");
     });
 
-    return () => unsubscribe();
-  // currentAppUser is removed from dependencies to prevent cycles if its structure changes but ID remains.
-  // The logic inside onAuthStateChanged should correctly handle setting appUser based on firebaseUser.
+    return () => {
+      console.log("AuthContextProvider: useEffect for onAuthStateChanged cleaning up listener.");
+      unsubscribe();
+    };
   }, [setAppUser]); 
 
 
