@@ -1,6 +1,9 @@
+import type { MoodLog } from "@/types/mood";
 import type { Task } from "@/types/task";
 import type { User } from "@/types/user";
-import { useState, useEffect } from 'react';
+import { get_file_content_summary } from "tools/tools";
+import { useEffect, useState } from "react";
+
 
 // Helper hook to manage client-side random selection
 function useClientSideRandom<T>(items: T[]): T | null {
@@ -18,8 +21,21 @@ function useClientSideRandom<T>(items: T[]): T | null {
   return selectedItem;
 }
 
+async function getContextInfo() {
+  const moodLogSummary = await get_file_content_summary("src/types/mood.ts");
+  const taskSummary = await get_file_content_summary("src/types/task.ts");
+  const communitySummary = await get_file_content_summary(
+    "src/components/community/CommunityService.ts"
+  );
 
-function getAICoachNudge(user: User | null, task: Task | null): string {
+  return `MoodLog: ${moodLogSummary.summary}
+  Task: ${taskSummary.summary}
+  Community: ${communitySummary.summary}`;
+}
+
+async function getAICoachNudge(user: User | null, task: Task | null): Promise<string> {
+  const contextInfo = await getContextInfo();
+
   const generalNudges = [
     "You're totally slaying it! ✨",
     "Keep that main character energy! 💅",
@@ -33,6 +49,8 @@ function getAICoachNudge(user: User | null, task: Task | null): string {
     "This is your sign to keep going! 😉",
   ];
 
+  
+
   if (!user || !task) {
     const randomIndex = Math.floor(Math.random() * generalNudges.length);
     return generalNudges[randomIndex];
@@ -40,17 +58,19 @@ function getAICoachNudge(user: User | null, task: Task | null): string {
 
   const taskName = task.name;
   const userName = user.name;
+  
   const nudges = [
-    `Yo ${userName}, you're almost there with ${taskName}! Keep vibin'! 🎶`,
-    `Push through, ${userName}! ${taskName} is basically donezo. ✅`,
-    `Stay focused, fam! ${userName}, you're making big moves on ${taskName}! 📈`,
-    `Don't dip, ${userName}! ${taskName} is nearly in the bag! 💰`,
-    `Remember the goal, ${userName}! That ${taskName} progress is fire! 🔥`,
-    `${userName}, you're absolutely bodying ${taskName}! Let's gooo! 💥`,
-    `OK, ${userName}, you're popping off on ${taskName}! We love to see it! 🤩`,
+    `Yo ${userName}, you're almost there with ${taskName}! Keep vibin'! 🎶 Context: ${contextInfo}`,
+    `Push through, ${userName}! ${taskName} is basically donezo. ✅ Context: ${contextInfo}`,
+    `Stay focused, fam! ${userName}, you're making big moves on ${taskName}! 📈 Context: ${contextInfo}`,
+    `Don't dip, ${userName}! ${taskName} is nearly in the bag! 💰 Context: ${contextInfo}`,
+    `Remember the goal, ${userName}! That ${taskName} progress is fire! 🔥 Context: ${contextInfo}`,
+    `${userName}, you're absolutely bodying ${taskName}! Let's gooo! 💥 Context: ${contextInfo}`,
+    `OK, ${userName}, you're popping off on ${taskName}! We love to see it! 🤩 Context: ${contextInfo}`,
   ];
 
   const randomIndex = Math.floor(Math.random() * nudges.length);
+
   return nudges[randomIndex];
 }
 
@@ -69,4 +89,4 @@ function getAICoachMessage(user: User | null, task: Task | null): string {
   return `Ayy ${userName}! Mad props for grinding on ${taskName}. Keep that positive energy flowin'! You're doing amazing, sweetie. 💖`;
 }
 
-export { getAICoachMessage, getAICoachNudge, useClientSideRandom };
+export { getAICoachMessage, getAICoachNudge, useClientSideRandom, getContextInfo };

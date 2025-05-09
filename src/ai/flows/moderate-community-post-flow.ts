@@ -16,11 +16,13 @@ const ModerateCommunityPostInputSchema = z.object({
 export type ModerateCommunityPostInput = z.infer<typeof ModerateCommunityPostInputSchema>;
 
 const ModerationFlagCategorySchema = z.enum([
-    "HATE_SPEECH",
-    "HARASSMENT",
-    "SEXUALLY_EXPLICIT",
-    "DANGEROUS_CONTENT",
-    "SPAM",
+    "HATE_SPEECH", // Content promoting discrimination or hatred
+    "HARASSMENT", // Bullying or intimidation
+    "SEXUALLY_EXPLICIT", // Inappropriate sexual content
+    "DANGEROUS_CONTENT", // Content promoting self-harm or illegal activities
+    "SPAM", // Unwanted advertisements or repetitive content
+    "MISINFORMATION", // False or misleading information
+    "PRIVACY_VIOLATION", // Sharing personal information without consent
     "OTHER"
 ]);
 
@@ -47,15 +49,18 @@ const moderateCommunityPostFlow = ai.defineFlow(
       prompt: `You are an AI content moderator for a GenZ wellness app's community forum. Your goal is to keep the vibes positive and safe.
       Analyze the following community post content. Determine if it's appropriate.
       If it's inappropriate, provide a brief, user-friendly (GenZ style) reason and identify the category of violation (e.g., HATE_SPEECH, HARASSMENT, SEXUALLY_EXPLICIT, DANGEROUS_CONTENT, SPAM, OTHER).
-
+      
       Post Content:
       "${input.postContent}"
 
       Consider the following guidelines for inappropriateness:
-      - Hate speech (racism, sexism, homophobia, etc.)
-      - Harassment or bullying
-      - Sexually explicit content
-      - Promotion of dangerous activities or self-harm
+      - Hate speech: Content promoting discrimination or hatred based on race, ethnicity, religion, gender, sexual orientation, disability, or other characteristics.
+      - Harassment or bullying: Content intended to insult, intimidate, or harm another individual or group.
+      - Sexually explicit content: Inappropriate sexual content, including descriptions or images.
+      - Promotion of dangerous activities or self-harm: Content that encourages harm to oneself or others, or illegal activities.
+      - Misinformation: False or misleading information that could harm the user, community or the general public.
+      - Privacy violation: Sharing personal information about oneself or others without their explicit consent.
+      - Spam or irrelevant advertising: Unwanted advertisements, repetitive content, or off-topic posts.
       - Spam or irrelevant advertising
       - Excessive negativity or personal attacks not constructive.
 
@@ -63,14 +68,18 @@ const moderateCommunityPostFlow = ai.defineFlow(
       If it's inappropriate, set isAppropriate to false, provide a reason, and list flaggedCategories.
 
       Example of inappropriate:
-      Post Content: "Everyone who likes pineapple on pizza is dumb lol, kys"
-      Output: { "isAppropriate": false, "reason": "Woah there, bestie! Let's keep the chat respectful and avoid harmful jokes. #PositiveVibesOnly", "flaggedCategories": ["HARASSMENT", "DANGEROUS_CONTENT"] }
+      Post Content: "Everyone who likes pineapple on pizza is dumb lol, kys! Btw, my social security number is 1234-5678-9."
+      Output: { "isAppropriate": false, "reason": "Hey! Let's chill with the insults and keep personal info safe. Plus, no promoting harm here! #RespectfulCommunity", "flaggedCategories": ["HARASSMENT", "DANGEROUS_CONTENT", "PRIVACY_VIOLATION"] }
       
       Example of appropriate:
       Post Content: "Just crushed my workout! Feeling super energized today! What's everyone else up to?"
       Output: { "isAppropriate": true }
 
-      Provide the output as a JSON object matching the defined schema.
+      Example of inappropriate:
+      Post Content: "Vaccines cause autism. I know because my uncle's friend's cousin said so."
+      Output: { "isAppropriate": false, "reason": "Whoa, we need to keep info accurate and reliable. Let's avoid spreading claims without evidence. #FactCheck", "flaggedCategories": ["MISINFORMATION"] }
+
+      Provide the output strictly as a JSON object matching the defined schema.
       `,
       output: {
         schema: ModerateCommunityPostOutputSchema,
@@ -89,7 +98,7 @@ const moderateCommunityPostFlow = ai.defineFlow(
     if (finishReason === 'blocked') {
         return {
             isAppropriate: false,
-            reason: "This post couldn't be processed due to safety filters. Keep it positive, fam!",
+            reason: "Oops, this post got caught in our safety net! Let's keep the vibes positive and safe.",
             flaggedCategories: ["OTHER"]
         };
     }
@@ -107,7 +116,7 @@ const moderateCommunityPostFlow = ai.defineFlow(
 
     // Ensure output adheres to schema, especially if 'reason' is missing for inappropriate posts
     if (!output.isAppropriate && !output.reason) {
-        output.reason = "This post doesn't quite match our community vibes. Try to keep it positive and respectful!";
+        output.reason = "This post doesn't quite fit our community vibe. Let's keep it positive and respectful!";
         if (!output.flaggedCategories || output.flaggedCategories.length === 0) {
             output.flaggedCategories = ["OTHER"];
         }

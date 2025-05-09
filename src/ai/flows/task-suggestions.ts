@@ -87,13 +87,41 @@ const taskSuggestionsFlow = ai.defineFlow(
       {{/if}}
 
       Suggest 3 tasks now.
+      The tasks MUST align with the app's GenZ wellness theme.
+        Include tasks related to:
+        - Mindfulness: activities that focus on being present and aware.
+        - Social Connection: tasks that encourage interaction and bonding with others.
+        - Physical Activity: any form of movement that gets the body going.
+        - Creative Expression: activities that allow for creativity and imagination.
+        - Learning: acquiring new skills or knowledge.
+      Examples:
+      - Mindfulness:
+        - "Meditate with an app for 10 minutes." (hasNeuroBoost: true)
+        - "Practice mindful breathing." (hasNeuroBoost: true)
+        - "Take a digital detox hour." (hasNeuroBoost: true)
+      - Social Connection:
+        - "Call a friend to catch up." (hasNeuroBoost: false)
+        - "Play a game online with friends." (hasNeuroBoost: false)
+        - "Have a meal with family without phones." (hasNeuroBoost: false)
+      - Physical Activity:
+        - "Do a 15-minute workout video." (hasNeuroBoost: true)
+        - "Go for a brisk walk in the park." (hasNeuroBoost: false)
+        - "Dance to your favorite playlist for 20 minutes." (hasNeuroBoost: true)
+      - Creative Expression:
+        - "Sketch or doodle for 15 minutes." (hasNeuroBoost: true)
+        - "Write a short poem." (hasNeuroBoost: true)
+        - "Take some creative photos." (hasNeuroBoost: true)
+      - Learning:
+        - "Watch an educational video online." (hasNeuroBoost: true)
+        - "Read a chapter of a book." (hasNeuroBoost: true)
+        - "Listen to a podcast on a new topic." (hasNeuroBoost: true)
       `,
       model: 'googleai/gemini-2.0-flash',
       input: input, // Pass structured input directly to Handlebars template
       output: {
         schema: TaskSuggestionsOutputSchema, // Expect structured output
       },
-      config: {
+      config: { 
         temperature: 0.7, // More creative suggestions
       }
     });
@@ -109,9 +137,11 @@ const taskSuggestionsFlow = ai.defineFlow(
       // Fallback if AI fails
       return { 
         suggestions: [
-          { name: "15 Min Mindful Moment", description: "Pause and practice mindfulness for 15 minutes. Issa vibe check for your brain.", hasNeuroBoost: true },
-          { name: "Quick Energy Burst Walk", description: "Take a brisk 10-minute walk to boost energy. Get those steps in, bestie!", hasNeuroBoost: false },
-          { name: "Reflect & Journal Sesh", description: "Spend 10 minutes journaling your thoughts and feelings. Spill the tea to yourself.", hasNeuroBoost: true }
+          { name: "Mindful Meditation", description: "Take 10 minutes to practice mindful meditation and center yourself.", hasNeuroBoost: true },
+          { name: "Connect with a Friend", description: "Reach out to a friend and catch up. Good vibes only.", hasNeuroBoost: false },
+          { name: "Stretch Break", description: "Spend 10 minutes stretching your body. Shake off that stiffness!", hasNeuroBoost: false },
+          
+
         ]
       };
     }

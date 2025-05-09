@@ -3,7 +3,7 @@
 
 import { useState, useEffect, type FormEvent } from "react";
 import type { CommunityPost } from "@/types/community";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import CommunityService from "@/components/community/CommunityService";
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Send, Users, MessageSquarePlus, Sparkles, Trophy, Loader2, Lightbulb } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useUser } from "@/contexts/UserContext";
-import { useMoodLogs } from "@/contexts/MoodLogsContext";
+import { useMoodLogs } from "@/contexts/MoodLogsContext";;
 import { generateCommunityChallenges, type Challenge, type GenerateCommunityChallengesOutput } from "@/ai/flows/community-challenges-flow";
 import { useToast } from "@/hooks/use-toast";
 
@@ -96,7 +96,16 @@ export function CommunityDisplay() {
     event.preventDefault();
     if (newPostContent.trim() && communityService && user) {
       const newPostData: CommunityPost = {
-        id: generateId(),
+          id: generateId(),
+          likes: 0,
+          comments: [],
+          shares: 0,
+          likedBy: [],
+          commentCount: 0,
+          shareCount: 0,
+          edited: false,
+          deleted: false,
+          userId: user.id,
         userName: user.name || "Vibe Explorer", 
         userAvatar: user.avatar?.imageUrl,
         message: newPostContent,
@@ -109,6 +118,56 @@ export function CommunityDisplay() {
     }
   };
   
+
+  const handleLikePost = async (postId: string) => {
+    try {
+        if (!user || !communityService) return;
+        const updatedPosts = await communityService.likePost(postId, user.id);
+        setPosts(updatedPosts);
+    } catch (error) {
+        console.error("Error liking post:", error);
+         toast({
+            title: "Failed to like post",
+            description: "There was a problem liking the post. Please try again.",
+            variant: "destructive",
+          });
+    }
+};
+
+const handleCommentPost = async (postId: string, commentText: string) => {
+    try {
+        if (!user || !communityService || !commentText) return;
+
+        const updatedPosts = await communityService.commentPost(postId, {
+            id: generateId(),
+            userId: user.id,
+            userName: user.name || "Vibe Explorer",
+            userAvatar: user.avatar?.imageUrl,
+            comment: commentText,
+            timestamp: new Date().toISOString(),
+        });
+        setPosts(updatedPosts);
+    } catch (error) {
+        console.error("Error commenting on post:", error);
+         toast({
+            title: "Failed to comment",
+            description: "There was a problem commenting on the post. Please try again.",
+            variant: "destructive",
+          });
+    }
+};
+
+
+const handleDeletePost = async (postId: string) => {
+    try {
+        await communityService?.deletePost(postId);
+        setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+    } catch (error) {
+        console.error("Error deleting post:", error);
+    }
+};
+  
+
   const handleChallengePost = () => {
     if (currentChallenge && user) {
       const challengePostContent = `Accepted the challenge: "${currentChallenge.title}"! 🎉\n\n${currentChallenge.description}`;
@@ -220,7 +279,7 @@ export function CommunityDisplay() {
             <ScrollArea className="h-[400px] pr-4">
                 <div className="space-y-4">
                     {posts.map((post) => (
-                        <Card key={post.id} className="bg-card/90 p-4 shadow-md hover:shadow-lg transition-shadow rounded-xl border-border/70">
+                        <Card key={post.id} className="bg-card/90 p-4 shadow-md hover:shadow-lg transition-shadow rounded-xl border-border/70 relative">
                             <div className="flex items-start gap-3 mb-2">
                                 {post.userAvatar ? (
                                      <img src={post.userAvatar} alt={`${post.userName}'s avatar`} data-ai-hint="user avatar" className="h-10 w-10 rounded-full object-cover border-2 border-primary/50"/>
@@ -239,6 +298,59 @@ export function CommunityDisplay() {
                                     <p className="text-foreground whitespace-pre-wrap text-sm">{post.message}</p>
                                 </div>
                             </div>
+                               {/* Buttons row */}
+                                <div className="flex items-center justify-end space-x-2 mt-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleLikePost(post.id)}
+                                    >
+                                        Like {post.likedBy?.length > 0 ? `(${post.likedBy.length})` : ""}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            const commentText = prompt("Enter your comment:");
+                                            if (commentText !== null && commentText.trim() !== "") {
+                                                handleCommentPost(post.id, commentText.trim());
+                                            }
+                                        }}
+                                    >
+                                        Comment {post.comments?.length > 0 ? `(${post.comments.length})` : ""}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {}}
+                                    >
+                                        Share {post.shareCount > 0 ? `(${post.shareCount})` : ""}
+                                    </Button>
+                                    {user?.id === post.userId && (
+                                        <>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    // Handle edit post logic here
+                                                    // For example, you might open a modal to edit the post
+                                                     toast({
+                                                        title: "Not Implemented!",
+                                                        description: "The edit function is still in development",
+                                                        variant: "warning",
+                                                        });
+                                                }}
+                                            >
+                                                Edit
+                                            </Button>
+                                            <Button variant="ghost" size="sm" onClick={() => handleDeletePost(post.id)}>
+                                                Delete
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                               
+
                         </Card>
                     ))}
                 </div>

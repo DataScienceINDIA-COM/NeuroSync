@@ -7,6 +7,7 @@ import { Header } from "@/components/Header";
 import { MoodLogForm } from "@/components/mood/MoodLogForm";
 import { MoodChart } from "@/components/mood/MoodChart";
 import { PersonalizedInsights } from "@/components/mood/PersonalizedInsights";
+import CommunityDisplay from "@/components/community/CommunityDisplay";
 import {
   Card,
   CardContent,
@@ -15,184 +16,219 @@ import {
   CardDescription,
   CardFooter,
 } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
 import TaskService from "@/components/task/TaskService";
-import type { Task } from "@/types/task";
+import type { Task as AppTask } from "@/types/task"; // Renamed to avoid conflict
 import type { Hormone } from "@/types/hormone";
 import type { Reward } from "@/types/reward";
 import RewardDisplay from "@/components/rewards/RewardDisplay";
-import CommunityDisplay from "@/components/community/CommunityDisplay";
 import { getAICoachNudge, useClientSideRandom } from "@/ai/coach";
 import ContentDisplay from "@/components/content/ContentDisplay";
-import type { User } from "@/types/user";
+import type { User as AppUser } from "@/types/user"; 
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Edit3, Brain, Zap, CheckCircle2, Gift, Users, BookOpen, Info, Wand2, ImagePlus, Loader2, Sparkles, Bell } from "lucide-react";
-import { generateAvatar } from "@/ai/flows/generate-avatar-flow";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Edit3, Brain, Zap, CheckCircle2, Wand2, ImagePlus, Loader2, Sparkles, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut } from "lucide-react";
+import { generateAvatar } from "@/ai/flows/generate-avatar-flow"; 
 import { useToast } from "@/hooks/use-toast";
-import { UserProvider, useUser } from "@/contexts/UserContext";
+import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
 import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
 import { requestNotificationPermission, onMessageListener } from '@/lib/firebase-messaging';
+import { cn } from "@/lib/utils";
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
+import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
+import { auth, googleAuthProvider, handleSignOut as firebaseLibSignOut } from '@/lib/firebase';
+import { signInWithPopup } from 'firebase/auth';
+import { getRandomHormone } from "@/ai/hormone-prediction";
 
 
-const LOCAL_STORAGE_KEY_TASKS = "vibeCheckTasks";
-const LOCAL_STORAGE_KEY_REWARDS = "vibeCheckRewards";
-const LOCAL_STORAGE_KEY_NEUROPOINTS = "vibeCheckNeuroPoints";
+const LOCAL_STORAGE_KEY_TASKS_PREFIX = "vibeCheckTasks_";
+const LOCAL_STORAGE_KEY_REWARDS_PREFIX = "vibeCheckRewards_";
+const LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX = "vibeCheckNeuroPoints_";
 
 
 function HomePageContent() {
-  const { moodLogs, handleLogMood: contextHandleLogMood, setMoodLogs: contextSetMoodLogs } = useMoodLogs();
-  const { user, setUser } = useUser(); 
+  const { moodLogs, handleLogMood: contextHandleLogMood } = useMoodLogs();
+  const { user: authUser, loading: authLoading } = useAuth();
+  const { user: appUser, setUser: setAppUser } = useAppUser(); 
 
-  const [isClient, setIsClient] = useState(false);
+
   const { toast } = useToast();
+  const [isClient, setIsClient] = useState(false);
   
-  const taskService = useMemo(() => {
-    if (!isClient || !user) return null; 
-    const userWithMoodLogs = { ...user, moodLogs: moodLogs || [] };
-    return new TaskService(userWithMoodLogs);
-  }, [user, moodLogs, isClient]);
-
-  const [tasks, setTasks] = useState<Task[]>(() => {
-     if (typeof window !== 'undefined') {
-      const storedTasks = localStorage.getItem(LOCAL_STORAGE_KEY_TASKS);
-      if (storedTasks) {
-        try {
-          return JSON.parse(storedTasks);
-        } catch (e) {
-          console.error("Failed to parse tasks from localStorage", e);
-          return [];
-        }
-      }
-    }
-    return [];
-  });
-
-  const incompleteTasks = useMemo(() => tasks.filter(t => !t.isCompleted), [tasks]);
-  const randomIncompleteTask = useClientSideRandom(incompleteTasks);
-  
-  const nudge = useMemo(() => {
-    if (!isClient || !user) return "Loading your dose of awesome... ⏳"; // GenZ Vibe
-    return getAICoachNudge(user, randomIncompleteTask ?? null);
-  }, [user, randomIncompleteTask, isClient]);
-
-
-  const [neuroPoints, setNeuroPoints] = useState<number>(() => {
-    if (typeof window !== 'undefined') {
-      const storedPoints = localStorage.getItem(LOCAL_STORAGE_KEY_NEUROPOINTS);
-      if (storedPoints) {
-        try {
-          return JSON.parse(storedPoints);
-        } catch (e) {
-          console.error("Failed to parse neuro points from localStorage", e);
-          return 0;
-        }
-      }
-    }
-    return 0;
-  });
-
-  const [rewards, setRewards] = useState<Reward[]>(() => {
-    if (typeof window !== 'undefined') {
-      const storedRewards = localStorage.getItem(LOCAL_STORAGE_KEY_REWARDS);
-      if (storedRewards) {
-        try {
-          return JSON.parse(storedRewards);
-        } catch (e) {
-          console.error("Failed to parse rewards from localStorage", e);
-        }
-      }
-    }
-    return [
-      { id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
-      { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" },
-      { id: generateId(), name: "Stress-Less eBook", description: "Cop a free eBook on managing the bad vibes.", pointsRequired: 200, isUnlocked: false, type: "real-world" },
-    ];
-  });
-
+  const [tasks, setTasks] = useState<AppTask[]>([]);
+  const [neuroPoints, setNeuroPoints] = useState<number>(0);
+  const [rewards, setRewards] = useState<Reward[]>([]);
   const [avatarDescription, setAvatarDescription] = useState<string>("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
 
+  const getLocalStorageKey = (prefix: string) => authUser ? `${prefix}${authUser.uid}` : `${prefix}guest`;
+
+
   useEffect(() => {
-    setIsClient(true);
-    if ('Notification' in window && user && setUser) {
+    setIsClient(true); // This should be at the top-level of the component or a higher-level context.
+                      // For now, keeping it here for simplicity of the fix.
+  }, []);
+
+  useEffect(() => {
+    if (!isClient) return;
+
+    if (authUser && appUser) {
+        // User is logged in, load their specific data
+        const userTasksKey = getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX);
+        const storedTasks = localStorage.getItem(userTasksKey);
+        if (storedTasks) setTasks(JSON.parse(storedTasks));
+        else setTasks([]); // Or initialize with default tasks for new authenticated user
+        
+        const userRewardsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX);
+        const storedRewards = localStorage.getItem(userRewardsKey);
+        if (storedRewards) setRewards(JSON.parse(storedRewards));
+        else setRewards([ /* default rewards for authenticated user */
+            { id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
+            { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" },
+        ]);
+
+        const userPointsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX);
+        const storedPoints = localStorage.getItem(userPointsKey);
+        if (storedPoints) setNeuroPoints(JSON.parse(storedPoints));
+        else setNeuroPoints(0);
+
+    } else if (!authUser && appUser && appUser.id.startsWith('guest_')) {
+        // Guest user (appUser exists and ID indicates guest)
+        const guestTasksKey = getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX); // Will resolve to prefix + "guest"
+        const storedTasks = localStorage.getItem(guestTasksKey);
+        if (storedTasks) setTasks(JSON.parse(storedTasks)); else setTasks([]);
+
+        const guestRewardsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX);
+        const storedRewards = localStorage.getItem(guestRewardsKey);
+        if (storedRewards) setRewards(JSON.parse(storedRewards)); else setRewards([/* default guest rewards */
+            { id: generateId(), name: "Quick Vibe Boost", description: "A little something for our guest!", pointsRequired: 20, isUnlocked: false, type: "virtual" },
+        ]);
+        
+        const guestPointsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX);
+        const storedPoints = localStorage.getItem(guestPointsKey);
+        if (storedPoints) setNeuroPoints(JSON.parse(storedPoints)); else setNeuroPoints(0);
+    } else {
+        // No authUser and no guest appUser (or appUser not loaded yet), clear or set to initial state
+        setTasks([]);
+        setRewards([]);
+        setNeuroPoints(0);
+    }
+  }, [isClient, authUser, appUser]);
+
+
+  useEffect(() => {
+    if (isClient && appUser) { // Save data if appUser exists (either logged in or guest)
+      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX), JSON.stringify(tasks));
+      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX), JSON.stringify(rewards));
+      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX), JSON.stringify(neuroPoints));
+    }
+  }, [tasks, rewards, neuroPoints, isClient, appUser, authUser]); // authUser dependency ensures key changes on login/logout
+
+
+  const taskService = useMemo(() => {
+    if (!isClient || !appUser) return null; 
+    return new TaskService(appUser);
+  }, [appUser, isClient]);
+
+
+  useEffect(() => {
+    if (isClient && authUser && appUser && setAppUser) { // Ensure setAppUser is available from useAppUser
       requestNotificationPermission().then(async token => {
         if (token) {
-          console.log("FCM Token:", token);
-          const result = await storeUserFCMToken(user.id, token);
+          const result = await storeUserFCMToken(authUser.uid, token);
           if (result.success) {
-            setUser(prevUser => prevUser ? ({ ...prevUser, fcmToken: token }) : null);
+             setAppUser(prevAppUser => prevAppUser ? ({ ...prevAppUser, fcmToken: token }) : null);
             toast({ title: "Notifications Enabled! 🔔", description: "You'll get cool updates now. Low-key excited!" });
           } else {
              toast({ title: "Uh Oh! 😥", description: `Failed to save notification settings: ${result.message}. Try again later, fam.`, variant: "destructive"});
           }
         } else {
-          console.log("Permission not granted for notifications or no token received.");
            toast({ title: "No Stress! 😎", description: "Notifications are off. You can change this in browser settings anytime, no cap.", variant: "default"});
         }
       });
 
-      // Listen for foreground messages
-      const unsubscribePromise = onMessageListener().then(unsubscribeFn => {
-        console.log('Foreground message listener attached.');
-        return unsubscribeFn; // This is the actual unsubscribe function
-      }).catch(err => {
-        console.error('Failed to listen for foreground messages: ', err);
-        return () => { console.log("No-op unsubscribe due to error during listener setup."); }; // Return a no-op function on error
-      });
+      const unsubscribePromise = onMessageListener().then(unsubscribeFn => unsubscribeFn)
+        .catch(err => { console.error('Failed to listen for foreground messages: ', err); return () => {}; });
       
-      // Cleanup listener on unmount
-      return () => {
-        unsubscribePromise.then(fn => {
-          if (typeof fn === 'function') {
-            fn(); // Call the unsubscribe function
-            console.log("Foreground message listener detached.");
-          }
-        }).catch(err => console.error('Error unsubscribing from FCM: ', err));
-      };
+      return () => { unsubscribePromise.then(fn => { if (typeof fn === 'function') fn(); }); };
     }
-  }, [isClient, user, setUser, toast]);
+  }, [isClient, authUser, appUser, setAppUser, toast]);
 
 
   useEffect(() => {
-    if (isClient) {
-      localStorage.setItem(LOCAL_STORAGE_KEY_TASKS, JSON.stringify(tasks));
-      localStorage.setItem(LOCAL_STORAGE_KEY_REWARDS, JSON.stringify(rewards));
-      localStorage.setItem(LOCAL_STORAGE_KEY_NEUROPOINTS, JSON.stringify(neuroPoints));
-    }
-  }, [tasks, rewards, neuroPoints, isClient]);
-
-  useEffect(() => {
-    if (isClient && tasks.length === 0 && taskService && user) {
+    if (isClient && tasks.length === 0 && taskService && appUser && moodLogs) {
       const initializeTasks = async () => {
-        const defaultTaskData: Omit<Task, 'id' | 'isCompleted'>[] = [
+        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted'>[] = [
           { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true },
           { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false },
-          { name: "Read for 20", description: "Expand the mind grapes. Big brain energy.", rewardPoints: 15, hasNeuroBoost: false },
-          { name: "Catch 8hrs Zzz's", description: "Good sleep is a W. Bet.", rewardPoints: 20, hasNeuroBoost: false },
-          { name: "Journal Dump (10m)", description: "Spill the tea in your journal. Period.", rewardPoints: 10, hasNeuroBoost: true },
         ];
         
-        const newTasks = await Promise.all(defaultTaskData.map(async (taskData) => {
-          if(!taskService || !user) return null; 
+        const newTasksPromises = defaultTaskData.map(async (taskData) => {
+          if(!taskService || !appUser) return null; 
           const currentUserMood = moodLogs?.[0]?.mood || "Neutral"; 
-          const rewardPoints = await taskService.calculateRewardPointsForTask(taskData.description, currentUserMood, user.hormoneLevels);
+          const rewardPoints = await taskService.calculateRewardPointsForTask(taskData.description, currentUserMood, appUser.hormoneLevels);
           return taskService.createTask({...taskData, rewardPoints});
-        }));
-        setTasks(newTasks.filter(Boolean) as Task[]);
+        });
+        const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
+        setTasks(newTasks);
       };
       initializeTasks();
     }
-  }, [isClient, taskService, user, moodLogs]); 
+  }, [isClient, taskService, appUser, moodLogs, tasks.length]);
 
+
+  const handleGoogleSignIn = async () => {
+    if (!auth) {
+        toast({ title: "Authentication service not ready.", variant: "destructive" });
+        return;
+    }
+    try {
+      // Before signing in, if there's guest data, consider migrating or clearing it.
+      // For now, AuthContext handles creating a new appUser profile or loading existing for the UID.
+      await signInWithPopup(auth, googleAuthProvider);
+      toast({
+        title: "Signed In! 🎉",
+        description: "You're logged in with Google. Let's vibe!",
+      });
+      // Data loading for the new authUser will be handled by useEffect dependent on authUser.
+    } catch (error: any) {
+      console.error("Google Sign-In Error:", error);
+      toast({
+        title: "Sign-In Hiccup 😬",
+        description: `Couldn't sign you in: ${error.message}. Try again?`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleFirebaseSignOutInternal = async () => {
+    if (!auth) {
+        toast({ title: "Authentication service not ready.", variant: "destructive" });
+        return;
+    }
+    try {
+      await firebaseLibSignOut(auth); 
+      // AuthContext will update authUser to null.
+      // useEffect dependent on authUser will then handle guest data loading.
+      toast({
+        title: "Signed Out! 👋",
+        description: "You've successfully signed out. Catch ya later!",
+      });
+    } catch (error: any) {
+      console.error("Sign Out Error:", error);
+      toast({
+        title: "Sign-Out Fail 😥",
+        description: `Couldn't sign you out: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleTaskCompletion = (taskId: string) => {
-    if (!taskService || !user || !setUser) return; 
+    if (!taskService || !appUser || !setAppUser) return; 
     const taskToComplete = tasks.find(t => t.id === taskId);
     if (!taskToComplete || taskToComplete.isCompleted) return;
 
@@ -200,114 +236,114 @@ function HomePageContent() {
     if (updatedTask) {
       setTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
       setNeuroPoints(prevPoints => prevPoints + (updatedTask.rewardPoints * (updatedTask.hasNeuroBoost ? 10 : 1)));
-      setUser(prevUser => {
-        if (!prevUser) return null;
+      setAppUser(prevAppUser => {
+        if (!prevAppUser) return null;
         return {
-          ...prevUser,
-          completedTasks: [...prevUser.completedTasks, updatedTask],
+          ...prevAppUser,
+          completedTasks: [...prevAppUser.completedTasks, updatedTask],
           streak: taskService.user.streak 
-        }
+        };
       });
 
-      // Send notification on task completion
-      if (user.fcmToken) {
-        sendNotificationToUser(user.id, {
+      if (appUser.fcmToken && authUser) { 
+        sendNotificationToUser(authUser.uid, { 
           title: "Quest Smashed! 🚀",
           body: `You just crushed '${updatedTask.name}'! Keep that W energy!`,
           data: { taskId: updatedTask.id }
         }).then(response => {
-          if (response.success) {
-            console.log("Task completion notification sent!");
-          } else {
-            console.error("Failed to send task completion notification:", response.message);
-          }
+          if (response.success) console.log("Task completion notification sent!");
+          else console.error("Failed to send task completion notification:", response.message);
         });
       }
     }
   };
   
   const handleClaimReward = (rewardId: string) => {
-    if (!user || !setUser) return;
+    if (!appUser || !setAppUser) return;
     const rewardToClaim = rewards.find(r => r.id === rewardId);
     if (rewardToClaim && !rewardToClaim.isUnlocked && neuroPoints >= rewardToClaim.pointsRequired) {
       setNeuroPoints(prev => prev - rewardToClaim.pointsRequired);
       setRewards(prevRewards => prevRewards.map(r => r.id === rewardId ? {...r, isUnlocked: true} : r));
-      setUser(prevUser => {
-        if (!prevUser) return null;
+      setAppUser(prevAppUser => {
+        if (!prevAppUser) return null;
         return {
-          ...prevUser,
-          claimedRewards: [...prevUser.claimedRewards, {...rewardToClaim, isUnlocked: true}]
-        }
+          ...prevAppUser,
+          claimedRewards: [...prevAppUser.claimedRewards, {...rewardToClaim, isUnlocked: true}]
+        };
       });
     }
   };
 
   const handleGenerateAvatar = async () => {
-    if (!user || !setUser) return;
+    if (!authUser || !appUser || !setAppUser) return; // Need authUser for UID
     if (avatarDescription.trim().length < 10) {
-      toast({
-        title: "Yo, Hold Up! 🧐",
-        description: "Your avatar prompt needs a bit more spice! At least 10 chars, fam.",
-        variant: "destructive",
-      });
+      toast({ title: "Yo, Hold Up! 🧐", description: "Your avatar prompt needs a bit more spice! At least 10 chars, fam.", variant: "destructive" });
       return;
     }
-    if (avatarDescription.trim().length > 200) {
-      toast({
-        title: "Easy There, Shakespeare! 😅",
-        description: "Keep that prompt under 200 chars. Short 'n sweet!",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsGeneratingAvatar(true);
     try {
       const result = await generateAvatar({ 
-        userId: user.id,
+        userId: authUser.uid, 
         description: avatarDescription,
-        previousAvatarPath: user.avatar?.imagePath 
+        previousAvatarPath: appUser.avatar?.imagePath 
       });
-      setUser(prevUser => {
-        if(!prevUser) return null;
+      setAppUser(prevAppUser => {
+        if(!prevAppUser) return null;
         return {
-          ...prevUser,
+          ...prevAppUser,
           avatar: {
-            ...(prevUser.avatar || { id: generateId(), name: 'New Avatar', description: '' }), 
+            ...(prevAppUser.avatar || { id: generateId(), name: 'New Avatar', description: '' }), 
             imageUrl: result.imageUrl,
-            imagePath: result.imagePath, // Store the new path
+            imagePath: result.imagePath, 
             description: `AI-generated: ${avatarDescription}`, 
           }
-        }
+        };
       });
-      toast({
-        title: "Avatar Leveled Up! ✨🚀",
-        description: "Your new AI-generated vibe is live! Looking fresh!",
-      });
+      toast({ title: "Avatar Leveled Up! ✨🚀", description: "Your new AI-generated vibe is live! Looking fresh!" });
       setAvatarDescription(""); 
     } catch (error: any) {
       console.error("Avatar generation failed:", error);
-      toast({
-        title: "AI Brain Fart! 🧠💨",
-        description: error.message || "Couldn't generate your avatar. Try a different prompt or give it a sec!",
-        variant: "destructive",
-      });
+      toast({ title: "AI Brain Fart! 🧠💨", description: error.message || "Couldn't generate your avatar.", variant: "destructive" });
     } finally {
       setIsGeneratingAvatar(false);
     }
   };
 
+  const handleSendTestNotification = async () => {
+    if (!authUser || !appUser?.fcmToken) {
+      toast({ title: "Can't Send Push! 🚧", description: "Enable notifications or check your settings, bestie.", variant: "destructive" });
+      return;
+    }
+    setIsSendingNotification(true);
+    const result = await sendNotificationToUser(authUser.uid, { 
+      title: "Vibe Check Test! 🧪",
+      body: `Yo ${appUser.name}, this is a test notification! It's giving... works! 🎉`,
+      data: { test: "true" }
+    });
+    setIsSendingNotification(false);
+    if (result.success) toast({ title: "Test Notification Sent! 📬", description: "Check your device, it should pop off!" });
+    else toast({ title: "Push Fail! 😭", description: `Couldn't send test notification: ${result.message}`, variant: "destructive" });
+  };
+
+  const incompleteTasks = useMemo(() => tasks.filter(t => !t.isCompleted), [tasks]);
+  const randomIncompleteTask = useClientSideRandom(incompleteTasks);
+  
+  const nudge = useMemo(() => {
+    if (!isClient || !appUser) return "Loading your dose of awesome... ⏳";
+    return getAICoachNudge(appUser, randomIncompleteTask ?? null);
+  }, [appUser, randomIncompleteTask, isClient]);
+
   const existingDates = moodLogs.map((log) => log.date);
 
   useEffect(() => {
      const fetchTaskSuggestions = async () => {
-      if (isClient && taskService && user && moodLogs && moodLogs.length > 0) { 
-        const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs); 
+      if (isClient && taskService && appUser && moodLogs && moodLogs.length > 0) { 
+        const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs, appUser.hormoneLevels, appUser.completedTasks); 
         if (suggestedTaskDetails) {
           const newTasksPromises = suggestedTaskDetails.map(async (taskDetail) => {
-            if(!taskService || !user) return null;
+            if(!taskService || !appUser) return null;
             const currentUserMood = moodLogs?.[0]?.mood || "Neutral";
-            const rewardPoints = await taskService.calculateRewardPointsForTask(taskDetail.description, currentUserMood, user.hormoneLevels);
+            const rewardPoints = await taskService.calculateRewardPointsForTask(taskDetail.description, currentUserMood, appUser.hormoneLevels);
             return taskService.createTask({ 
               name: taskDetail.name,
               description: taskDetail.description,
@@ -315,87 +351,126 @@ function HomePageContent() {
               rewardPoints: rewardPoints,
             });
           });
-          const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as Task[];
+          const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
           setTasks(prevTasks => {
             const existingTaskNames = new Set(prevTasks.map(t => t.name));
-            const uniqueNewTasks = newTasks.filter(nt => !existingTaskNames.has(nt.name));
-            return [...prevTasks, ...uniqueNewTasks];
+            const uniqueNewTasks = newTasksResult.filter(nt => !existingTaskNames.has(nt.name));
+            return [...prevTasks, ...uniqueNewTasks]; 
           });
         }
       }
     };
     
-    if (tasks.length <= 5 && moodLogs && moodLogs.length > 0) { 
+    if (appUser && tasks.length <= 5 && moodLogs && moodLogs.length > 0) { 
        fetchTaskSuggestions();
     }
-  }, [isClient, taskService, user, moodLogs, tasks.length]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isClient, taskService, appUser, moodLogs]); // tasks.length removed to re-fetch if moodLogs change
 
-  const handleSendTestNotification = async () => {
-    if (!user || !user.fcmToken) {
-      toast({
-        title: "Can't Send Push! 🚧",
-        description: "Enable notifications or check your settings, bestie.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setIsSendingNotification(true);
-    const result = await sendNotificationToUser(user.id, {
-      title: "Vibe Check Test! 🧪",
-      body: `Yo ${user.name}, this is a test notification! It's giving... works! 🎉`,
-      data: { test: "true" }
-    });
-    setIsSendingNotification(false);
-    if (result.success) {
-      toast({ title: "Test Notification Sent! 📬", description: "Check your device, it should pop off!" });
-    } else {
-      toast({ title: "Push Fail! 😭", description: `Couldn't send test notification: ${result.message}`, variant: "destructive" });
-    }
-  };
-
-  if (!isClient || !user) { 
+  if (authLoading || !appUser) { // Show loading if auth is loading OR appUser is not yet initialized
     return (
       <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
         <Loader2 className="h-12 w-12 animate-spin text-accent" />
-        <p className="text-lg ml-4 text-accent font-semibold">Loading your epic vibes... ✨</p>
+        <p className="text-lg ml-4 text-accent font-semibold">Checking your Vibe ID... ✨</p>
       </div>
     );
   }
 
+  if (!authUser) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground">
+        <Card className="p-8 shadow-xl border-accent w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <Sparkles className="h-16 w-16 text-accent" />
+            </div>
+            <CardTitle className="text-3xl font-bold text-primary">Vibe Check</CardTitle>
+            <CardDescription className="text-muted-foreground mt-2">
+              Sign in to unlock your personalized wellness journey. <br /> It&apos;s about to get real.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="mt-6">
+            <Button onClick={handleGoogleSignIn} className="w-full text-lg py-3 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all">
+              <svg className="mr-2 -ml-1 w-6 h-6" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
+              Sign In with Google
+            </Button>
+          </CardContent>
+           <CardFooter className="text-xs text-muted-foreground mt-4 text-center">
+            By signing in, you agree to our totally chill Terms of Service and Privacy Policy.
+          </CardFooter>
+        </Card>
+         {appUser && appUser.id.startsWith('guest_') && ( // Show guest content if appUser is a guest
+          <div className="mt-8 text-center">
+            <p className="text-muted-foreground">Or continue exploring as a guest.</p>
+            {/* Add a button or link to proceed as guest if desired, or automatically show guest content */}
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  // If authUser exists, but appUser is somehow still null (shouldn't happen with AuthContext logic), show loading.
+  if (!appUser) {
+      return (
+        <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
+            <Loader2 className="h-12 w-12 animate-spin text-accent" />
+            <p className="text-lg ml-4 text-accent font-semibold">Loading your profile... 🤳</p>
+        </div>
+        );
+  }
+  
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
-      <main className="flex-grow container mx-auto p-4 md:p-6 space-y-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
-          <section className="lg:col-span-1 space-y-6">
-            <Card className="shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="drop-shadow-sm">My Glow Up</CardTitle> 
-                <Button variant="ghost" size="icon" onClick={() => alert("Profile edit finna drop!")}><Edit3 className="h-4 w-4"/></Button> 
+      <main className="flex-grow container mx-auto p-4 md:p-6 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
+
+           <section className="lg:col-span-1 space-y-6">
+            <Card className="shadow-md border-accent">
+              <CardHeader className="flex flex-col gap-2">
+                <div className="flex flex-row items-center justify-between">
+                  <CardTitle className="drop-shadow-sm font-extrabold text-2xl text-primary">My Vibe</CardTitle>
+                  <div className="flex items-center">
+                    <Button variant="ghost" size="icon" onClick={() => alert("Profile edit finna drop!")}  className="mr-1">
+                        <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleFirebaseSignOutInternal} className="shadow-sm hover:shadow">
+                      <LogOut className="mr-2 h-4 w-4" /> Sign Out
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription className="text-muted-foreground">
+                  Track your journey and glow up, bestie! ✨
+                </CardDescription> 
               </CardHeader>
-              <CardContent className="flex flex-col items-center space-y-3">
-                <AvatarDisplay avatar={user.avatar} size={100}/>
-                <h2 className="text-xl font-semibold">{user.name}</h2>
-                <p className="text-sm text-muted-foreground">Streak: {user.streak} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
-                 <p className="text-lg font-bold text-accent drop-shadow-md">VibePoints: {neuroPoints} VP</p>
-                {nudge && <p className="text-xs text-center p-3 bg-accent/10 rounded-lg text-accent-foreground shadow-sm">{nudge}</p>}
-                {user.fcmToken && (
-                  <Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="mt-2">
-                    {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}
-                    {isSendingNotification ? "Sending..." : "Test Push"}
-                  </Button>
-                )}
+              <CardContent className="flex flex-col items-center space-y-3 ">
+                <AvatarDisplay 
+                  avatar={appUser?.avatar || (authUser.photoURL ? {id: authUser.uid, name: authUser.displayName || '', description: 'User Avatar', imageUrl: authUser.photoURL} : null)} 
+                  size={100} 
+                />
+                <h2 className="text-2xl font-bold tracking-tight text-center">{appUser?.name || authUser.displayName || "Vibe User"}</h2>
+                <p className="text-sm text-muted-foreground">Streak: {appUser?.streak || 0} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
+                <p className="text-3xl font-extrabold text-primary drop-shadow-md">VibePoints: {neuroPoints} VP</p>
+                <div className="w-full text-center">
+                  <div className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "justify-center w-full text-sm")}>
+                   <LayoutDashboard className="mr-2 h-4 w-4" />
+                   <span className="text-xs">Tap to expand</span>
+                  </div>
+                 {nudge && <p className="text-sm text-center p-3 bg-primary/10 rounded-lg text-primary shadow-sm">{nudge}</p>}
+                </div>
+              </CardContent>
+              <CardContent className="flex justify-center">
+                {appUser?.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
               </CardContent>
             </Card>
 
             <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 drop-shadow-sm">
-                  <ImagePlus className="h-6 w-6 text-primary" />
-                  AI Avatar Studio ✨
+              <CardHeader className="flex flex-col space-y-2">
+                <CardTitle className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary">
+                  <ImagePlus className="h-5 w-5 text-primary" /> AI Avatar Studio ✨
                 </CardTitle>
-                <CardDescription>
-                  Craft a unique avatar with AI! Describe your vision below. Keep it cool, keep it clean. 😉
+                <CardDescription className="text-muted-foreground">
+                  Unleash your inner artist! Describe your dream avatar, and watch our AI bring it to life. 🎨
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -409,52 +484,57 @@ function HomePageContent() {
                 />
                 <Button
                   onClick={handleGenerateAvatar}
-                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200}
+                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || !authUser}
                   className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
-                  {isGeneratingAvatar ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Wand2 className="mr-2 h-4 w-4" />
-                  )}
+                  {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                   {isGeneratingAvatar ? "AI Makin' Magic..." : "Generate My Vibe!"}
                 </Button>
               </CardContent>
             </Card>
-            
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="drop-shadow-sm">Daily Vibe Check</CardTitle> 
-                <CardDescription>What's the tea? Spill it.</CardDescription> 
-              </CardHeader>
-              <CardContent>
-                <MoodLogForm onLogMood={contextHandleLogMood} existingDates={existingDates} />
-              </CardContent>
-            </Card>
-            
-            <PersonalizedInsights moodLogs={moodLogs} />
           </section>
 
-          <section className="lg:col-span-2 space-y-6">
-            <MoodChart moodLogs={moodLogs} />
-            
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 drop-shadow-sm"><Brain className="h-5 w-5 text-primary"/>Brain Juice Levels</CardTitle>
-                <CardDescription>Peep what your brain's cookin' up, bestie.</CardDescription> 
+          <section className="lg:col-span-2 flex flex-col space-y-6">
+             <Card className="shadow-md border-accent">
+              <CardHeader className="flex flex-col space-y-2">
+                <div className="flex flex-row items-center justify-between">
+                  <CardTitle className="drop-shadow-sm font-extrabold text-xl text-primary flex items-center gap-2"><CalendarClock className="mr-2 h-5 w-5" />Daily Vibe Check</CardTitle>
+                </div>
+                <CardDescription className="text-muted-foreground">
+                  How are you feeling today? Log your mood, fam. ✨
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div><Sparkles className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{user.hormoneLevels.dopamine}%</span></div>
-                <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{user.hormoneLevels.adrenaline}%</span></div>
-                <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500"><path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Cortisol: <span className="font-semibold">{user.hormoneLevels.cortisol}%</span></div>
-                <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>Serotonin: <span className="font-semibold">{user.hormoneLevels.serotonin}%</span></div>
-              </CardContent>
+                <CardContent>
+                  <MoodLogForm onLogMood={contextHandleLogMood} existingDates={existingDates} />
+                </CardContent>
             </Card>
+
+            <Card className="shadow-md border-accent">
+               <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle className="font-extrabold text-xl drop-shadow-sm flex items-center"><BarChart3 className="mr-2 h-5 w-5" />Mood Insights</CardTitle> 
+                </CardHeader>
+                 <CardContent><MoodChart moodLogs={moodLogs} /></CardContent>
+            </Card>
+
+            {appUser && (
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary"><Brain className="h-5 w-5 text-primary"/>Brain Juice Levels</CardTitle>
+                  <CardDescription className="text-muted-foreground">Peep what your brain's cookin' up, bestie.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div><Sparkles className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
+                  <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
+                  <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500"><path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span></div>
+                  <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span></div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 drop-shadow-sm"><CheckCircle2 className="h-5 w-5 text-primary"/>Today's Quests</CardTitle>
-                 <CardDescription>Small W's = Big Vibe Energy. Get those VibePoints!</CardDescription> 
+                <CardTitle className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary"><ListChecks className="h-5 w-5 text-primary"/>Today's Quests</CardTitle>
+                 <CardDescription className="text-muted-foreground">Small W's = Big Vibe Energy. Complete quests to get VibePoints!</CardDescription>
               </CardHeader>
               <CardContent>
                 {tasks.length > 0 ? (
@@ -482,59 +562,33 @@ function HomePageContent() {
                 )}
               </CardContent>
             </Card>
-
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="drop-shadow-sm">Vibe Archive</CardTitle>
-                <CardDescription>Your mood history? It's giving ✨receipts✨.</CardDescription> 
-              </CardHeader>
-              <CardContent>
-                {moodLogs.length > 0 ? (
-                  <ScrollArea className="h-[300px] pr-4">
-                    <div className="space-y-4">
-                      {moodLogs.map((log) => (
-                        <Card key={log.id} className="p-4 bg-card/90 hover:shadow-lg transition-shadow rounded-xl border-border/70">
-                          <h3 className="font-semibold text-md text-primary-foreground drop-shadow-sm">
-                            {format(parseISO(log.date), "EEEE, MMM d, yyyy")}
-                          </h3>
-                          <p className="text-sm text-foreground">
-                            <strong className="font-medium">Vibe:</strong> {log.mood}
-                          </p>
-                          {log.activities.length > 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              <strong>Activities:</strong> {log.activities.join(", ")}
-                            </p>
-                          )}
-                          {log.notes && (
-                            <p className="text-xs text-muted-foreground mt-1 italic">
-                              <strong>Extra Tea:</strong> {log.notes}
-                            </p>
-                          )}
-                        </Card>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <p className="text-muted-foreground text-center py-10">
-                    No vibes logged yet, bruh. Start tracking to see your archive! 
-                  </p>
-                )}
-              </CardContent>
+             <Card className="shadow-md border-accent">
+                <CardHeader className="flex flex-col space-y-2">
+                  <div className="flex flex-row items-center justify-between">
+                    <CardTitle className="drop-shadow-sm font-extrabold text-xl flex items-center text-primary"><Lightbulb className="mr-2 h-5 w-5" />AI Suggestions</CardTitle>
+                  </div>
+                  <CardDescription className="text-muted-foreground">
+                     Check what the AI have for you!
+                  </CardDescription>
+                </CardHeader>
+               <CardContent>
+                 <PersonalizedInsights moodLogs={moodLogs} />
+               </CardContent>
             </Card>
           </section>
         </div>
         
-        <section className="lg:col-span-3 space-y-6">
+        <section className="lg:col-span-3 space-y-6 mt-10">
            <RewardDisplay rewards={rewards} neuroPoints={neuroPoints} onClaimReward={handleClaimReward} />
         </section>
-        <section className="lg:col-span-3 space-y-6">
+        <section className="lg:col-span-3 space-y-6 mt-10">
            <CommunityDisplay />
         </section>
-        <section className="lg:col-span-3 space-y-6">
+        <section className="lg:col-span-3 space-y-6 mt-10">
            <ContentDisplay />
         </section>
       </main>
-      <footer className="text-center p-6 border-t border-border/50 text-sm text-muted-foreground">
+      <footer className="text-center p-6 border-t border-border/50 text-sm text-muted-foreground mt-10">
         <p>&copy; {new Date().getFullYear()} Vibe Check. Keep it 💯. ✌️</p> 
       </footer>
     </div>
@@ -543,12 +597,13 @@ function HomePageContent() {
 
 export default function Page() {
   return (
-    <UserProvider>
-      <MoodLogsProvider>
-        <HomePageContent />
-      </MoodLogsProvider>
-    </UserProvider>
+    <AppUserProvider> 
+      <AuthContextProvider> 
+        <MoodLogsProvider>
+          <HomePageContent />
+        </MoodLogsProvider>
+      </AuthContextProvider>
+    </AppUserProvider>
   );
 }
-
     
