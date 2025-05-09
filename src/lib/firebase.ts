@@ -32,7 +32,7 @@ if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
 Please ensure NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_PROJECT_ID are correctly set in your .env file.
 Is API Key set? ${!!firebaseConfig.apiKey}
 Is Project ID set? ${!!firebaseConfig.projectId}
-Refer to Firebase project settings to get these values.`;
+Refer to Firebase project settings to get these values. You might need to restart your development server after updating the .env file.`;
   console.error(errorMessage);
   // Stop execution if essential Firebase config is missing to make the issue unmissable.
   throw new Error(errorMessage);
@@ -184,3 +184,4 @@ const writeToDatabase = async (path: string, data: any) => {
 const googleAuthProvider = new GoogleAuthProvider();
 
 export { app, db, auth, storage, functions, database, analytics, googleAuthProvider, handleSignOut, uploadFile, downloadFile, callFunction, readFromDatabase, writeToDatabase };
+
