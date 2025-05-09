@@ -1,11 +1,10 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
 import { Memory, getMemory } from '@/tools/memory';
 import { Message, MessageType, createMessage } from '@/tools/message';
 import { Agent, getAgent, createAgent } from '@/tools/agent';
-import { simulateUiApproval } from '@/tools/tools'; 
+import { simulateUiApproval } from '@/tools/tools';
 import { z } from 'genkit';
 import { Trigger, createTrigger } from '@/tools/trigger';
 
@@ -67,9 +66,16 @@ export async function getTaskSuggestions(input: TaskSuggestionsInput, agentId = 
     await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate waiting 1 second for approval
     // Conceptually, the agent would now wait for a user interaction in the UI that triggers the approval.
     // For simulation, we'll call the simulateUiApproval tool directly.
-    await simulateUiApproval(response.content.requestId, true); // Simulate user approving the request
+    if (response.content.requestId) {
+      await simulateUiApproval(response.content.requestId, true); // Simulate user approving the request
+    }
     // Re-send the message or have the agent re-trigger the command internally after simulated approval
- response = await taskSuggester.receive_message(message); // Re-sending the original message or checking for status update
+    response = await taskSuggester.receive_message(message); // Re-sending the original message or checking for status update
+  }
+
+  if (!response || !response.content || !response.content.output) {
+     console.error("Task suggester did not return valid output.", response);
+     return { suggestions: [] }; // Fallback to empty suggestions
   }
 
   return response.content.output;
@@ -90,49 +96,25 @@ async function createOrGetTaskSuggesterAgent(agentId: string, memory: Memory): P
     });
     
     const trigger1 = createTrigger("1", "new Mood log", "NEW_MOOD_LOG", async (message: Message, agent: Agent) => {
-      const response = await agent.use_llm(`There is a new mood log, ${message.content}. Is there any new tasks that I should suggest?`);
-      if (response.toLocaleLowerCase().includes("yes")) {
-        const output = await taskSuggestionsFlow(message.content.input);
+      const response = await agent.use_llm(`There is a new mood log, ${JSON.stringify(message.content)}. Is there any new tasks that I should suggest?`);
+      if (response?.text?.toLocaleLowerCase().includes("yes")) {
+        const output = await taskSuggestionsFlow(message.content.input); // Assuming input is part of message.content
         const newMessageContent = { output };
         return createMessage(agent.name, message.sender, MessageType.OBSERVATION, newMessageContent);
       }
       return createMessage(agent.name, message.sender, MessageType.OBSERVATION, { message: "No new tasks needed." });
     });
-    const trigger2 = createTrigger("2", "Information Requested", MessageType.REQUEST_INFORMATION, async (message: Message, taskSuggester: Agent) => {
+    const trigger2 = createTrigger("2", "Information Requested", MessageType.REQUEST_INFORMATION, async (message: Message, taskSuggesterAgent: Agent) => {
       const output = await taskSuggestionsFlow(message.content.input);
       const newMessageContent = { output };
-      return createMessage(taskSuggester.name, message.sender, MessageType.OBSERVATION, newMessageContent);
+      return createMessage(taskSuggesterAgent.name, message.sender, MessageType.OBSERVATION, newMessageContent);
     });
     taskSuggester.add_trigger(trigger1);
     taskSuggester.add_trigger(trigger2);
 
-
-
   }
   return taskSuggester;
 }
-
-function getTriggeredResponse(taskSuggester:Agent, message: Message) {
-
-    const triggerResponse = taskSuggester.execute_trigger(message.type as string); // Cast message.type to string
-    return triggerResponse;
-  }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 const taskSuggestionsFlow = ai.defineFlow(
   {
@@ -141,97 +123,127 @@ const taskSuggestionsFlow = ai.defineFlow(
     outputSchema: TaskSuggestionsOutputSchema,
   },
   async (input) => {
-    const { output, finishReason, usage } = await ai.generate({
-      prompt: `You are a fun, GenZ-style AI assistant helping a user find cool tasks to do.
-      Based on the user's mood logs, hormone levels, and recently completed tasks, suggest 3 new tasks.
-      Each task MUST have a "name", a "description", and a "hasNeuroBoost" (boolean) field.
-      Make the tasks sound engaging and relevant to improving well-being or achieving small goals.
-      The "name" should be short and catchy. The "description" should be 1-2 sentences.
-      
-      User's Mood Logs:
-      {{#if moodLogs.length}}
-      {{#each moodLogs}}
-      - Date: {{this.date}}, Mood: {{this.mood}}, Activities: {{#if this.activities.length}}{{this.activities.join ', '}}{{else}}None{{/if}}{{#if this.notes}}, Notes: {{this.notes}}{{/if}}
-      {{/each}}
-      {{else}}
-      No mood logs provided.
-      {{/if}}
+    let attempts = 0;
+    const maxAttempts = 3;
+    const retryDelay = 2000; // 2 seconds
 
-      User's Hormone Levels (0-100%):
-      - Dopamine: {{hormoneLevels.dopamine}}%
-      - Adrenaline: {{hormoneLevels.adrenaline}}%
-      - Cortisol: {{hormoneLevels.cortisol}}%
-      - Serotonin: {{hormoneLevels.serotonin}}%
-
-      User's Recently Completed Tasks:
-      {{#if completedTasks.length}}
-      {{#each completedTasks}}
-      - {{this.name}} ({{this.description}})
-      {{/each}}
-      {{else}}
-      No tasks recently completed.
-      {{/if}}
-
-      Suggest 3 tasks now.
-      The tasks MUST align with the app's GenZ wellness theme.
-        Include tasks related to:
-        - Mindfulness: activities that focus on being present and aware.
-        - Social Connection: tasks that encourage interaction and bonding with others.
-        - Physical Activity: any form of movement that gets the body going.
-        - Creative Expression: activities that allow for creativity and imagination.
-        - Learning: acquiring new skills or knowledge.
-      Examples:
-      - Mindfulness:
-        - "Meditate with an app for 10 minutes." (hasNeuroBoost: true)
-        - "Practice mindful breathing." (hasNeuroBoost: true)
-        - "Take a digital detox hour." (hasNeuroBoost: true)
-      - Social Connection:
-        - "Call a friend to catch up." (hasNeuroBoost: false)
-        - "Play a game online with friends." (hasNeuroBoost: false)
-        - "Have a meal with family without phones." (hasNeuroBoost: false)
-      - Physical Activity:
-        - "Do a 15-minute workout video." (hasNeuroBoost: true)
-        - "Go for a brisk walk in the park." (hasNeuroBoost: false)
-        - "Dance to your favorite playlist for 20 minutes." (hasNeuroBoost: true)
-      - Creative Expression:
-        - "Sketch or doodle for 15 minutes." (hasNeuroBoost: true)
-        - "Write a short poem." (hasNeuroBoost: true)
-        - "Take some creative photos." (hasNeuroBoost: true)
-      - Learning:
-        - "Watch an educational video online." (hasNeuroBoost: true)
-        - "Read a chapter of a book." (hasNeuroBoost: true)
-        - "Listen to a podcast on a new topic." (hasNeuroBoost: true)
-      `,
-      model: 'googleai/gemini-2.0-flash',
-      input: input, // Pass structured input directly to Handlebars template
-      output: {
-        schema: TaskSuggestionsOutputSchema, // Expect structured output
-      },
-      config: { 
-        temperature: 0.7, // More creative suggestions
-      }
-    });
-
-    if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
-        console.warn(`Task suggestion generation finished due to ${finishReason}. Output may be incomplete.`);
-    }
-    
-    // The output is already validated by Genkit against TaskSuggestionsOutputSchema
-    // If output is null or undefined, it means validation failed or generation failed.
-    if (!output || !output.suggestions || output.suggestions.length === 0) {
-      console.error("Failed to generate or parse AI response for task suggestions. Output:", output, "Usage:", usage);
-      // Fallback if AI fails
-      return { 
-        suggestions: [
-          { name: "Mindful Meditation", description: "Take 10 minutes to practice mindful meditation and center yourself.", hasNeuroBoost: true },
-          { name: "Connect with a Friend", description: "Reach out to a friend and catch up. Good vibes only.", hasNeuroBoost: false },
-          { name: "Stretch Break", description: "Spend 10 minutes stretching your body. Shake off that stiffness!", hasNeuroBoost: false },
+    while (attempts < maxAttempts) {
+      try {
+        const { output, finishReason, usage } = await ai.generate({
+          prompt: `You are a fun, GenZ-style AI assistant helping a user find cool tasks to do.
+          Based on the user's mood logs, hormone levels, and recently completed tasks, suggest 3 new tasks.
+          Each task MUST have a "name", a "description", and a "hasNeuroBoost" (boolean) field.
+          Make the tasks sound engaging and relevant to improving well-being or achieving small goals.
+          The "name" should be short and catchy. The "description" should be 1-2 sentences.
           
+          User's Mood Logs:
+          {{#if moodLogs.length}}
+          {{#each moodLogs}}
+          - Date: {{this.date}}, Mood: {{this.mood}}, Activities: {{#if this.activities.length}}{{this.activities.join ', '}}{{else}}None{{/if}}{{#if this.notes}}, Notes: {{this.notes}}{{/if}}
+          {{/each}}
+          {{else}}
+          No mood logs provided.
+          {{/if}}
 
-        ]
-      };
+          User's Hormone Levels (0-100%):
+          - Dopamine: {{hormoneLevels.dopamine}}%
+          - Adrenaline: {{hormoneLevels.adrenaline}}%
+          - Cortisol: {{hormoneLevels.cortisol}}%
+          - Serotonin: {{hormoneLevels.serotonin}}%
+
+          User's Recently Completed Tasks:
+          {{#if completedTasks.length}}
+          {{#each completedTasks}}
+          - {{this.name}} ({{this.description}})
+          {{/each}}
+          {{else}}
+          No tasks recently completed.
+          {{/if}}
+
+          Suggest 3 tasks now.
+          The tasks MUST align with the app's GenZ wellness theme.
+            Include tasks related to:
+            - Mindfulness: activities that focus on being present and aware.
+            - Social Connection: tasks that encourage interaction and bonding with others.
+            - Physical Activity: any form of movement that gets the body going.
+            - Creative Expression: activities that allow for creativity and imagination.
+            - Learning: acquiring new skills or knowledge.
+          Examples:
+          - Mindfulness:
+            - "Meditate with an app for 10 minutes." (hasNeuroBoost: true)
+            - "Practice mindful breathing." (hasNeuroBoost: true)
+            - "Take a digital detox hour." (hasNeuroBoost: true)
+          - Social Connection:
+            - "Call a friend to catch up." (hasNeuroBoost: false)
+            - "Play a game online with friends." (hasNeuroBoost: false)
+            - "Have a meal with family without phones." (hasNeuroBoost: false)
+          - Physical Activity:
+            - "Do a 15-minute workout video." (hasNeuroBoost: true)
+            - "Go for a brisk walk in the park." (hasNeuroBoost: false)
+            - "Dance to your favorite playlist for 20 minutes." (hasNeuroBoost: true)
+          - Creative Expression:
+            - "Sketch or doodle for 15 minutes." (hasNeuroBoost: true)
+            - "Write a short poem." (hasNeuroBoost: true)
+            - "Take some creative photos." (hasNeuroBoost: true)
+          - Learning:
+            - "Watch an educational video online." (hasNeuroBoost: true)
+            - "Read a chapter of a book." (hasNeuroBoost: true)
+            - "Listen to a podcast on a new topic." (hasNeuroBoost: true)
+          `,
+          model: 'googleai/gemini-2.0-flash',
+          input: input, // Pass structured input directly to Handlebars template
+          output: {
+            schema: TaskSuggestionsOutputSchema, // Expect structured output
+          },
+          config: { 
+            temperature: 0.7, // More creative suggestions
+          }
+        });
+
+        if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
+            console.warn(`Task suggestion generation finished due to ${finishReason}. Output may be incomplete.`);
+        }
+        
+        // The output is already validated by Genkit against TaskSuggestionsOutputSchema
+        // If output is null or undefined, it means validation failed or generation failed.
+        if (!output || !output.suggestions || output.suggestions.length === 0) {
+          console.error("Failed to generate or parse AI response for task suggestions. Output:", output, "Usage:", usage);
+          // Fallback if AI fails
+          return { 
+            suggestions: [
+              { name: "Mindful Meditation", description: "Take 10 minutes to practice mindful meditation and center yourself.", hasNeuroBoost: true },
+              { name: "Connect with a Friend", description: "Reach out to a friend and catch up. Good vibes only.", hasNeuroBoost: false },
+              { name: "Stretch Break", description: "Spend 10 minutes stretching your body. Shake off that stiffness!", hasNeuroBoost: false },
+            ]
+          };
+        }
+        
+        return output;
+
+      } catch (error: any) {
+        attempts++;
+        console.error(`Attempt ${attempts} failed for taskSuggestionsFlow: ${error.message}`);
+        if (error.message && (error.message.includes('GEMINI_RESOURCE_EXHAUSTED') || error.message.includes('429') || error.message.includes('Resource has been exhausted')) ) {
+          if (attempts < maxAttempts) {
+            console.log(`Retrying in ${retryDelay / 1000} seconds...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          } else {
+            console.error(`Max retry attempts (${maxAttempts}) reached. Giving up.`);
+            throw error; // Re-throw the error after max attempts
+          }
+        } else {
+          throw error; // Re-throw immediately for non-retryable errors
+        }
+      }
     }
-    
-    return output;
+    // This part should ideally not be reached if maxAttempts are exhausted and error is re-thrown.
+    // Providing a fallback if loop finishes without returning/throwing.
+    console.error("Task suggestions flow exhausted attempts or had an unexpected exit.");
+    return { 
+      suggestions: [
+        { name: "Default: Mindful Moment", description: "Take 5 minutes for yourself.", hasNeuroBoost: true },
+      ]
+    };
   }
 );
+
