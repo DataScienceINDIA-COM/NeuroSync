@@ -1,34 +1,46 @@
 
-import { initializeApp, getApps, getApp, type FirebaseApp, deleteApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, type Auth, signOut, User } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, type Auth, signOut } from 'firebase/auth';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { getFunctions, httpsCallable, type Functions } from 'firebase/functions';
 import { getDatabase, ref as databaseRef, get, set, type Database } from 'firebase/database';
 import { getAnalytics, type Analytics, isSupported } from 'firebase/analytics';
 
 // IMPORTANT: Replace with your app's actual Firebase project configuration
-// SECURITY RULES EXAMPLES:
-// Allow read/write to authenticated users:
-//   match /databases/{database}/documents {
-//     match /{document=**} {
-//       allow read, write: if request.auth != null;
-//     }
-//   }
+// This configuration expects environment variables to be set in your .env file.
+// Example .env content:
+// NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+// NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_auth_domain
+// NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+// ... and so on for other config values.
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  locationId: process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID,
+  locationId: process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID, // Optional: For specific Cloud Functions region
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
 };
 
+// Critical check for essential Firebase configuration
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  const errorMessage = `CRITICAL: Firebase API Key or Project ID is missing.
+Please ensure NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_PROJECT_ID are correctly set in your .env file.
+Is API Key set? ${!!firebaseConfig.apiKey}
+Is Project ID set? ${!!firebaseConfig.projectId}
+Refer to Firebase project settings to get these values.`;
+  console.error(errorMessage);
+  // Stop execution if essential Firebase config is missing to make the issue unmissable.
+  throw new Error(errorMessage);
+}
+
 let app: FirebaseApp;
 let db: Firestore;
-let auth: Auth; // Added Auth variable
+let auth: Auth;
 let storage: FirebaseStorage;
 let functions: Functions;
 let database: Database;
@@ -37,13 +49,6 @@ let analytics: Analytics | null = null;
 try {
   if (!getApps().length) {
     app = initializeApp(firebaseConfig);
-    if (typeof window !== 'undefined') {
-      isSupported().then((supported) => {
-        if (supported) {
-          analytics = getAnalytics(app);
-        }
-      });
-    }
   } else {
     app = getApp();
   }
@@ -51,20 +56,35 @@ try {
   db = getFirestore(app);
   auth = getAuth(app);
   storage = getStorage(app);
-  functions = getFunctions(app, process.env.NEXT_PUBLIC_FIREBASE_LOCATION_ID);
+  // Pass undefined to getFunctions if locationId is not set, allowing it to use the default region.
+  functions = getFunctions(app, firebaseConfig.locationId || undefined);
   database = getDatabase(app);
-} catch (error) {
-  console.error('Error initializing Firebase:', error);
+
+  if (typeof window !== 'undefined') {
+    isSupported().then((supported) => {
+      if (supported) {
+        analytics = getAnalytics(app);
+      }
+    });
+  }
+} catch (error: any) {
+  console.error('Error initializing Firebase services:', error.message);
+  // If initialization fails even after config check, re-throw to make it clear Firebase is not usable.
+  throw new Error(`Firebase service initialization failed: ${error.message || error.toString()}`);
 }
 
 
 // Function to handle Firebase sign out
-const handleSignOut = async () => {
+const handleSignOut = async (): Promise<void> => {
   try {
-    await signOut(auth);
-    console.log('User signed out successfully.');
-  } catch (error) {
-    console.error('Error signing out:', error);
+    if (auth) {
+      await signOut(auth);
+      console.log('User signed out successfully.');
+    } else {
+      console.warn('Auth object not initialized, cannot sign out.');
+    }
+  } catch (error: any) {
+    console.error('Error signing out:', error.message);
     throw error; // Re-throw the error to be handled by the caller
   }
 };
@@ -136,7 +156,7 @@ const readFromDatabase = async (path: string) => {
     if (snapshot.exists()) {
       return snapshot.val();
     } else {
-      console.log("No data available");
+      console.log("No data available for path:", path);
       return null;
     }
   } catch (error) {
@@ -161,6 +181,6 @@ const writeToDatabase = async (path: string, data: any) => {
 };
 
 
-const googleAuthProvider = new GoogleAuthProvider(); // Create a GoogleAuthProvider instance
+const googleAuthProvider = new GoogleAuthProvider();
 
-export { app, db, auth, storage, functions, database, analytics, googleAuthProvider, handleSignOut, uploadFile, downloadFile, callFunction, readFromDatabase, writeToDatabase }; // Export auth and provider
+export { app, db, auth, storage, functions, database, analytics, googleAuthProvider, handleSignOut, uploadFile, downloadFile, callFunction, readFromDatabase, writeToDatabase };
