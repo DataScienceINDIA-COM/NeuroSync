@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -38,8 +37,8 @@ import { requestNotificationPermission, onMessageListener } from '@/lib/firebase
 import { cn } from "@/lib/utils";
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
-import { signOutUser } from '@/services/authService'; // signInWithGoogle removed
-import FirebaseUIWidget from '@/components/auth/FirebaseUIWidget'; // Import FirebaseUIWidget
+import { signOutUser } from '@/services/authService'; 
+import FirebaseUIWidget from '@/components/auth/FirebaseUIWidget';
 
 
 const LOCAL_STORAGE_KEY_TASKS_PREFIX = "vibeCheckTasks_";
@@ -49,8 +48,8 @@ const LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX = "vibeCheckNeuroPoints_";
 
 function MainAppInterface() {
   const { moodLogs, handleLogMood: contextHandleLogMood } = useMoodLogs();
-  const { authUser } = useAuth(); // Get Firebase auth user from AuthContext
-  const { user: appUser, setUser: setAppUser } = useAppUser(); // Get AppUser from UserContext
+  const { authUser } = useAuth(); 
+  const { user: appUser, setUser: setAppUser } = useAppUser(); 
 
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
@@ -62,13 +61,11 @@ function MainAppInterface() {
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
 
-  // Helper to get user-specific local storage keys
   const getLocalStorageKey = (prefix: string, userId?: string | null) => {
     if (!userId) { 
-        // This case should be rare if appUser is always populated by AuthContext
+        console.warn("getLocalStorageKey: userId is null or undefined, using fallback key.");
         return `${prefix}default_fallback_no_id`; 
     }
-    // Guests have IDs starting with 'guest_'
     return `${prefix}${userId}`;
   };
 
@@ -78,7 +75,11 @@ function MainAppInterface() {
 
   // Load tasks, rewards, neuroPoints from localStorage when appUser is available
   useEffect(() => {
-    if (!isClient || !appUser || !appUser.id) return;
+    if (!isClient || !appUser || !appUser.id) {
+      console.log("MainAppInterface: useEffect for loading data skipped. isClient:", isClient, "appUser:", appUser);
+      return;
+    }
+    console.log("MainAppInterface: useEffect for loading data running for user:", appUser.id);
 
     const userSpecificId = appUser.id;
 
@@ -103,9 +104,9 @@ function MainAppInterface() {
   }, [isClient, appUser]);
 
 
-  // Save tasks, rewards, neuroPoints to localStorage when they change
   useEffect(() => {
     if (isClient && appUser && appUser.id) { 
+      console.log("MainAppInterface: useEffect for saving data running for user:", appUser.id);
       const userSpecificId = appUser.id;
       localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX, userSpecificId), JSON.stringify(tasks));
       localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX, userSpecificId), JSON.stringify(rewards));
@@ -120,13 +121,12 @@ function MainAppInterface() {
   }, [appUser, isClient]);
 
 
-  // Firebase Cloud Messaging setup
   useEffect(() => {
-    // Only run if client-side, authenticated (authUser exists), and appUser is loaded
     if (isClient && authUser && appUser && !appUser.id.startsWith('guest_') && setAppUser) { 
+      console.log("MainAppInterface: Setting up FCM for user:", authUser.uid);
       requestNotificationPermission().then(async token => {
         if (token) {
-          const result = await storeUserFCMToken(authUser.uid, token); // authUser.uid is reliable here
+          const result = await storeUserFCMToken(authUser.uid, token); 
           if (result.success) {
              setAppUser(prevAppUser => prevAppUser ? ({ ...prevAppUser, fcmToken: token }) : null);
             toast({ title: "Notifications Enabled! 🔔", description: "You'll get cool updates now. Low-key excited!" });
@@ -146,13 +146,13 @@ function MainAppInterface() {
   }, [isClient, authUser, appUser, setAppUser, toast]);
 
 
-  // Initialize default tasks if none exist for the user
   useEffect(() => {
     if (isClient && tasks.length === 0 && taskService && appUser) {
+      console.log("MainAppInterface: Initializing default tasks for user:", appUser.id);
       const initializeTasks = async () => {
-        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted'>[] = [
-          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true },
-          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false },
+        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted' | 'rewardPoints'>[] = [
+          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", hasNeuroBoost: true },
+          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", hasNeuroBoost: false },
         ];
         
         const newTasksPromises = defaultTaskData.map(async (taskData) => {
@@ -168,13 +168,13 @@ function MainAppInterface() {
 
 
   const handleFirebaseSignOutInternal = async () => {
-    const result = await signOutUser(); // From authService
+    console.log("MainAppInterface: handleFirebaseSignOutInternal called.");
+    const result = await signOutUser(); 
     if (result.success) {
       toast({
         title: "Signed Out! 👋",
         description: "You've successfully signed out. Catch ya later!",
       });
-      // AuthContext handles transitioning to a guest AppUser
     } else {
       toast({
         title: "Sign-Out Fail 😥",
@@ -202,7 +202,6 @@ function MainAppInterface() {
         };
       });
 
-      // Send notification only if authenticated user with FCM token
       if (authUser && appUser.fcmToken && !appUser.id.startsWith('guest_')) { 
         sendNotificationToUser(authUser.uid, { 
           title: "Quest Smashed! 🚀",
@@ -268,7 +267,6 @@ function MainAppInterface() {
   };
 
   const handleSendTestNotification = async () => {
-    // Only for authenticated users with FCM token
     if (!authUser || !appUser?.fcmToken || appUser.id.startsWith('guest_')) { 
       toast({ title: "Can't Send Push! 🚧", description: "This is for logged-in users with notifications enabled.", variant: "destructive" });
       return;
@@ -294,7 +292,6 @@ function MainAppInterface() {
 
   const existingDates = moodLogs.map((log) => log.date);
 
-  // Fetch AI task suggestions
   useEffect(() => {
      const fetchTaskSuggestions = async () => {
       if (isClient && taskService && appUser && moodLogs && moodLogs.length > 0 && !appUser.id.startsWith('guest_')) { 
@@ -302,13 +299,11 @@ function MainAppInterface() {
         if (suggestedTaskDetails && suggestedTaskDetails.suggestions) {
           const newTasksPromises = suggestedTaskDetails.suggestions.map(async (taskDetail) => {
             if(!taskService || !appUser) return null;
-            // Assuming taskDetail from getTaskSuggestions now includes all necessary fields
-            // or that createTask will calculate rewardPoints if not provided.
             return taskService.createTask({ 
               name: taskDetail.name,
               description: taskDetail.description,
               hasNeuroBoost: taskDetail.hasNeuroBoost,
-              rewardPoints: taskDetail.rewardPoints, // Ensure this is part of SuggestedTask
+              rewardPoints: taskDetail.rewardPoints, 
             });
           });
           const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
@@ -321,50 +316,30 @@ function MainAppInterface() {
       }
     };
     
-    // Fetch suggestions if user is authenticated, has few tasks, and has mood logs
     if (appUser && tasks.length <= 5 && moodLogs && moodLogs.length > 0 && !appUser.id.startsWith('guest_')) { 
        fetchTaskSuggestions();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClient, taskService, appUser, moodLogs]); 
   
-  const handleGuestSignIn = () => {
-    if (authUser) { // If a user is signed in, sign them out to become guest
-        handleFirebaseSignOutInternal().then(() => {
-            toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
-            // AuthContext will handle setting a new guest AppUser
-        });
-    } else if (appUser && appUser.id.startsWith('guest_')) { // Already a guest
-        toast({ title: "You're already a Guest! ✨", description: "Exploring the vibes, no strings attached!"});
-    } else { // Should not happen if AuthContext correctly initializes a guest user
-        console.warn("handleGuestSignIn: No authUser and current appUser is not guest. This state should be handled by AuthContext.");
-        // Potentially force a guest state, though AuthContext should manage this.
-        // For safety, could trigger a sign out to ensure guest state is established by AuthContext.
-        handleFirebaseSignOutInternal(); 
-    }
-  };
-
-  // Loading state for the main application UI
-  const { loading: authLoading } = useAuth();
-  if (authLoading || !appUser) { // Show loading if auth is processing or appUser isn't set yet
+  // Loading state for MainAppInterface itself based on its own data loading (tasks etc.)
+  // This is separate from the global auth loading.
+  if (!isClient || !appUser || (tasks.length === 0 && (!taskService || !appUser.id)) ) { // Added check for appUser.id to ensure it's loaded
+    console.log("MainAppInterface: Displaying loading state. isClient:", isClient, "appUser:", appUser, "tasks.length:", tasks.length, "taskService:", !!taskService);
     return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
-        <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
-        <h1 className="text-3xl font-bold text-primary mb-2">Vibe Check</h1>
-        <p className="text-muted-foreground">Loading your personalized vibe... ✨</p>
-      </div>
+        <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
+            <Loader2 className="h-12 w-12 text-accent animate-spin mb-4" />
+            <p className="text-muted-foreground">Getting your main vibe ready...</p>
+        </div>
     );
   }
 
-  // If no appUser (should be caught by loading above, but as fallback)
-  // This has been moved into RootPage's conditional rendering to decide between SignIn screen and MainAppInterface
-  // So, MainAppInterface will only render if appUser IS available.
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header>
         <Header.AuthSection
-          authUser={authUser} // Pass Firebase auth user
+          authUser={authUser} 
           onSignOut={handleFirebaseSignOutInternal}
         />
       </Header>
@@ -421,7 +396,7 @@ function MainAppInterface() {
                   onChange={(e) => setAvatarDescription(e.target.value)}
                   maxLength={200}
                   className="min-h-[100px] focus:bg-background shadow-inner"
-                  disabled={isGeneratingAvatar || appUser.id.startsWith('guest_')} // Disable for guests
+                  disabled={isGeneratingAvatar || appUser.id.startsWith('guest_')} 
                 />
                 <Button
                   onClick={handleGenerateAvatar}
@@ -436,7 +411,6 @@ function MainAppInterface() {
             </Card>
           </section>
 
-          {/* ... (rest of the MainAppInterface JSX, ensure it uses appUser correctly) ... */}
           <section className="lg:col-span-2 flex flex-col space-y-6">
              <Card className="shadow-md border-accent">
               <CardHeader className="flex flex-col space-y-2">
@@ -539,7 +513,6 @@ function MainAppInterface() {
 }
 
 
-// RootPage component now decides whether to show SignIn or MainApp
 export default function RootPage() { 
   return (
     <AppUserProvider> 
@@ -552,30 +525,34 @@ export default function RootPage() {
   );
 }
 
-// New component to handle logic for showing SignIn page or MainAppInterface
 function AppPageLogic() {
   const { loading: authLoading } = useAuth();
-  const { user: appUser } = useAppUser();
-  const { toast } = useToast(); // Access toast for guest sign-in
+  const { user: appUser, setUser: setAppUser } = useAppUser(); // Renamed to avoid conflict with FirebaseUser
+  const { toast } = useToast(); 
+  
+  console.log("AppPageLogic: Rendering. AuthLoading:", authLoading, "AppUser:", appUser);
 
 
-  const handleGuestSignIn = () => {
-    // AuthContext will handle creating/loading a guest user if no authUser is present after a sign-out
-    // If already guest (meaning no authUser and appUser is guest), it effectively does nothing new on appUser side.
-    signOutUser().then((result) => { // Attempt sign out to ensure clean state for guest
-        if(result.success || result.message?.includes("No user to sign out") || result.message?.includes("auth object not initialized")){ // Consider sign out successful if no user or already signed out
-             toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
-        } else {
-            toast({ title: "Guest Mode Hiccup", description: `Could not ensure guest mode cleanly: ${result.message}.`, variant: "destructive" });
-        }
-        // Regardless of signOutUser result, AuthContext should set a guest AppUser if no authUser
-    }).catch(error => {
-        toast({ title: "Guest Mode Error", description: `Error during guest transition: ${error.message}.`, variant: "destructive" });
-    });
+  const handleGuestSignIn = async () => {
+    console.log("AppPageLogic: handleGuestSignIn called.");
+    // This function should ensure that AuthContext transitions to a guest AppUser state.
+    // It primarily works by signing out any existing Firebase user.
+    // AuthContext's onAuthStateChanged listener will then detect no Firebase user
+    // and proceed to set up a guest AppUser.
+    const result = await signOutUser();
+    if(result.success || result.message?.includes("No user to sign out") || result.message?.includes("auth object not initialized")){
+         toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
+         console.log("AppPageLogic: Sign out successful or no user was signed in. AuthContext will handle guest user setup.");
+    } else {
+        toast({ title: "Guest Mode Hiccup", description: `Could not ensure guest mode cleanly: ${result.message}.`, variant: "destructive" });
+        console.error("AppPageLogic: Error during guest sign-in (sign-out attempt):", result.message);
+    }
+    // No need to directly call setAppUser here; AuthContext handles it.
   };
 
 
-  if (authLoading) { // Initial auth check is happening
+  if (authLoading) { 
+    console.log("AppPageLogic: Auth loading...");
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
@@ -585,7 +562,8 @@ function AppPageLogic() {
     );
   }
 
-  if (!appUser) { // Auth check done, but no appUser (either guest or authenticated) is set yet. This state should be very brief.
+  if (!appUser) { 
+     console.log("AppPageLogic: AppUser is null after auth loading. Showing 'Finalizing profile' screen.");
      return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
@@ -595,8 +573,8 @@ function AppPageLogic() {
     );
   }
   
-  // If appUser is a guest, show sign-in page with FirebaseUIWidget
   if (appUser.id.startsWith('guest_')) {
+     console.log("AppPageLogic: AppUser is guest. Showing sign-in page.");
      return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
         <div className="text-center space-y-6 w-full max-w-md p-8 bg-card shadow-xl rounded-2xl border border-border">
@@ -630,7 +608,6 @@ function AppPageLogic() {
       </div>
     );
   }
-
-  // If appUser exists and is not a guest, render the main application.
+  console.log("AppPageLogic: AppUser is authenticated. Rendering MainAppInterface.");
   return <MainAppInterface />;
 }
