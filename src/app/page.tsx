@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -28,7 +29,7 @@ import type { User as AppUser } from "@/types/user";
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Edit3, Brain, Zap, CheckCircle2, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut } from "lucide-react";
+import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow"; 
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
@@ -37,8 +38,9 @@ import { requestNotificationPermission, onMessageListener } from '@/lib/firebase
 import { cn } from "@/lib/utils";
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
-import { auth, googleAuthProvider, handleSignOut as firebaseLibSignOut } from '@/lib/firebase';
-import { signInWithPopup } from 'firebase/auth';
+// import { auth, googleAuthProvider, handleSignOut as firebaseLibSignOut } from '@/lib/firebase'; // No longer needed here
+// import { signInWithPopup } from 'firebase/auth'; // No longer needed here
+import { signInWithGoogle, signOutUser } from '@/services/authService'; // Import new auth service
 import { getRandomHormone } from "@/ai/hormone-prediction";
 
 
@@ -153,8 +155,6 @@ function MainAppInterface() {
         
         const newTasksPromises = defaultTaskData.map(async (taskData) => {
           if(!taskService || !appUser) return null; 
-          // Reward points are now part of defaultTaskData and will be used directly by createTask
-          // The AI calculation via taskService.calculateRewardPointsForTask is for AI suggested tasks
           return taskService.createTask(taskData);
         });
         const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
@@ -166,42 +166,34 @@ function MainAppInterface() {
 
 
   const handleGoogleSignIn = async () => {
-    if (!auth) {
-        toast({ title: "Authentication service not ready.", variant: "destructive" });
-        return;
-    }
-    try {
-      await signInWithPopup(auth, googleAuthProvider);
+    const result = await signInWithGoogle();
+    if (result.success) {
       toast({
         title: "Signed In! 🎉",
         description: "You're logged in with Google. Let's vibe!",
       });
-    } catch (error: any) {
-      console.error("Google Sign-In Error:", error);
+      // AuthContext will handle updating appUser
+    } else {
       toast({
         title: "Sign-In Hiccup 😬",
-        description: `Couldn't sign you in: ${error.message}. Try again?`,
+        description: `Couldn't sign you in: ${result.message || 'Unknown error'}. Try again?`,
         variant: "destructive",
       });
     }
   };
 
   const handleFirebaseSignOutInternal = async () => {
-    if (!auth) {
-        toast({ title: "Authentication service not ready.", variant: "destructive" });
-        return;
-    }
-    try {
-      await firebaseLibSignOut(auth); 
+    const result = await signOutUser();
+    if (result.success) {
       toast({
         title: "Signed Out! 👋",
         description: "You've successfully signed out. Catch ya later!",
       });
-    } catch (error: any) {
-      console.error("Sign Out Error:", error);
+      // AuthContext will handle updating appUser to guest or null
+    } else {
       toast({
         title: "Sign-Out Fail 😥",
-        description: `Couldn't sign you out: ${error.message}`,
+        description: `Couldn't sign you out: ${result.message || 'Unknown error'}`,
         variant: "destructive",
       });
     }
@@ -322,13 +314,10 @@ function MainAppInterface() {
         if (suggestedTaskDetails && suggestedTaskDetails.suggestions) {
           const newTasksPromises = suggestedTaskDetails.suggestions.map(async (taskDetail) => {
             if(!taskService || !appUser) return null;
-            // taskDetail now contains name, description, hasNeuroBoost from AI
-            // rewardPoints will be calculated by createTask -> calculateRewardPoints tool
             return taskService.createTask({ 
               name: taskDetail.name,
               description: taskDetail.description,
               hasNeuroBoost: taskDetail.hasNeuroBoost,
-              // rewardPoints are calculated inside createTask using the AI tool
             });
           });
           const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
@@ -341,12 +330,53 @@ function MainAppInterface() {
       }
     };
     
-    // Fetch suggestions if there are few tasks and some mood logs exist
     if (appUser && tasks.length <= 5 && moodLogs && moodLogs.length > 0) { 
        fetchTaskSuggestions();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClient, taskService, appUser, moodLogs]); 
+  
+  const handleGuestSignIn = () => {
+    // In AuthContext, if authUser is null, a guest AppUser is created.
+    // We can trigger a re-check in AuthContext or simply rely on it.
+    // For now, AuthContext handles guest creation on initial load if no authUser.
+    // This button could potentially clear any existing authUser (sign out if any)
+    // then rely on AuthContext to establish a guest session.
+    // Or, if already guest, it does nothing.
+    if (authUser) {
+        handleFirebaseSignOutInternal().then(() => {
+            toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
+        });
+    } else {
+        toast({ title: "You're already a Guest! ✨", description: "Exploring the vibes, no strings attached!"});
+    }
+  };
+
+  if (!appUser) {
+    return (
+      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
+        <div className="text-center space-y-6">
+            <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" />
+            <h1 className="text-4xl font-extrabold text-primary drop-shadow-md">Welcome to Vibe Check!</h1>
+            <p className="text-lg text-muted-foreground max-w-md mx-auto">
+                Your personal space to track moods, smash quests, and ride the good vibes.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button onClick={handleGoogleSignIn} className="text-lg py-3 px-6 shadow-lg hover:shadow-xl transition-all bg-primary hover:bg-primary/90">
+                    <svg className="mr-2 -ml-1 w-5 h-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512"><path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path></svg>
+                    Sign In with Google
+                </Button>
+                 <Button onClick={handleGuestSignIn} variant="outline" className="text-lg py-3 px-6 shadow-md hover:shadow-lg">
+                    <UserIcon className="mr-2 h-5 w-5" /> Or Continue as Guest
+                </Button>
+            </div>
+             <p className="text-xs text-muted-foreground mt-6">
+                By continuing, you agree to our imaginary Terms of Service and Privacy Policy.
+            </p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -525,27 +555,27 @@ function MainAppInterface() {
   );
 }
 
-function AppPageLogic() { 
-  const { loading: authLoading } = useAuth();
-  const { user: appUser } = useAppUser();
+// function AppPageLogic() { 
+//   const { loading: authLoading } = useAuth();
+//   const { user: appUser } = useAppUser();
 
-  if (authLoading || !appUser) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
-        <Loader2 className="h-12 w-12 animate-spin text-accent" />
-        <p className="text-lg ml-4 text-accent font-semibold">Checking your Vibe ID... ✨</p>
-      </div>
-    );
-  }
-  return <MainAppInterface />;
-}
+//   if (authLoading || !appUser) {
+//     return (
+//       <div className="flex justify-center items-center min-h-screen bg-background text-foreground">
+//         <Loader2 className="h-12 w-12 animate-spin text-accent" />
+//         <p className="text-lg ml-4 text-accent font-semibold">Checking your Vibe ID... ✨</p>
+//       </div>
+//     );
+//   }
+//   return <MainAppInterface />;
+// }
 
 export default function RootPage() { 
   return (
     <AppUserProvider> 
       <AuthContextProvider> 
         <MoodLogsProvider>
-          <AppPageLogic />
+          <MainAppInterface />
         </MoodLogsProvider>
       </AuthContextProvider>
     </AppUserProvider>
