@@ -150,9 +150,9 @@ function MainAppInterface() {
     if (isClient && tasks.length === 0 && taskService && appUser) {
       console.log("MainAppInterface: Initializing default tasks for user:", appUser.id);
       const initializeTasks = async () => {
-        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted' | 'rewardPoints'>[] = [
-          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", hasNeuroBoost: true },
-          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", hasNeuroBoost: false },
+        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted'>[] = [
+          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true },
+          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false },
         ];
         
         const newTasksPromises = defaultTaskData.map(async (taskData) => {
@@ -175,6 +175,11 @@ function MainAppInterface() {
         title: "Signed Out! 👋",
         description: "You've successfully signed out. Catch ya later!",
       });
+      // After signing out, AuthContext will handle setting appUser to guest.
+      // AppPageLogic will then show the login screen because authUser will be null.
+      // guestSessionActive in AppPageLogic should be reset if we want to force the choice again.
+      // For now, handleGuestSignIn in AppPageLogic manages guestSessionActive.
+      // If we want explicit sign out to show login immediately, that's handled by authUser becoming null.
     } else {
       toast({
         title: "Sign-Out Fail 😥",
@@ -294,7 +299,7 @@ function MainAppInterface() {
 
   useEffect(() => {
      const fetchTaskSuggestions = async () => {
-      if (isClient && taskService && appUser && moodLogs && moodLogs.length > 0 && !appUser.id.startsWith('guest_')) { 
+      if (isClient && taskService && appUser && moodLogs && !appUser.id.startsWith('guest_')) { 
         const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs, appUser.hormoneLevels, appUser.completedTasks); 
         if (suggestedTaskDetails && suggestedTaskDetails.suggestions) {
           const newTasksPromises = suggestedTaskDetails.suggestions.map(async (taskDetail) => {
@@ -322,9 +327,7 @@ function MainAppInterface() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isClient, taskService, appUser, moodLogs]); 
   
-  // Loading state for MainAppInterface itself based on its own data loading (tasks etc.)
-  // This is separate from the global auth loading.
-  if (!isClient || !appUser || (tasks.length === 0 && (!taskService || !appUser.id)) ) { // Added check for appUser.id to ensure it's loaded
+  if (!isClient || !appUser || (tasks.length === 0 && (!taskService || !appUser.id)) ) { 
     console.log("MainAppInterface: Displaying loading state. isClient:", isClient, "appUser:", appUser, "tasks.length:", tasks.length, "taskService:", !!taskService);
     return (
         <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
@@ -526,29 +529,33 @@ export default function RootPage() {
 }
 
 function AppPageLogic() {
-  const { loading: authLoading } = useAuth();
-  const { user: appUser, setUser: setAppUser } = useAppUser(); // Renamed to avoid conflict with FirebaseUser
+  const { authUser, loading: authLoading } = useAuth(); 
+  const { user: appUser, setUser: setAppUser } = useAppUser(); 
   const { toast } = useToast(); 
+  const [guestSessionActive, setGuestSessionActive] = useState(false);
   
-  console.log("AppPageLogic: Rendering. AuthLoading:", authLoading, "AppUser:", appUser);
+  console.log("AppPageLogic: Rendering. AuthLoading:", authLoading, "AppUser:", appUser, "AuthUser:", authUser, "GuestSessionActive:", guestSessionActive);
 
 
   const handleGuestSignIn = async () => {
     console.log("AppPageLogic: handleGuestSignIn called.");
-    // This function should ensure that AuthContext transitions to a guest AppUser state.
-    // It primarily works by signing out any existing Firebase user.
-    // AuthContext's onAuthStateChanged listener will then detect no Firebase user
-    // and proceed to set up a guest AppUser.
-    const result = await signOutUser();
+    const result = await signOutUser(); // Ensure any existing Firebase session is cleared
     if(result.success || result.message?.includes("No user to sign out") || result.message?.includes("auth object not initialized")){
          toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
          console.log("AppPageLogic: Sign out successful or no user was signed in. AuthContext will handle guest user setup.");
+         setGuestSessionActive(true); // Explicitly activate guest session for UI
     } else {
         toast({ title: "Guest Mode Hiccup", description: `Could not ensure guest mode cleanly: ${result.message}.`, variant: "destructive" });
         console.error("AppPageLogic: Error during guest sign-in (sign-out attempt):", result.message);
     }
-    // No need to directly call setAppUser here; AuthContext handles it.
   };
+
+  // Effect to reset guestSessionActive if user signs in with Firebase
+  useEffect(() => {
+    if (authUser) {
+      setGuestSessionActive(false);
+    }
+  }, [authUser]);
 
 
   if (authLoading) { 
@@ -562,8 +569,10 @@ function AppPageLogic() {
     );
   }
 
+  // After authLoading, appUser should be populated by AuthContext (either as real or guest)
+  // UserContext now initializes user to null, so !appUser is a valid loading state.
   if (!appUser) { 
-     console.log("AppPageLogic: AppUser is null after auth loading. Showing 'Finalizing profile' screen.");
+     console.log("AppPageLogic: AppUser is null after auth loading. AuthContext might still be setting it up or UserContext is initializing.");
      return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
@@ -573,41 +582,53 @@ function AppPageLogic() {
     );
   }
   
-  if (appUser.id.startsWith('guest_')) {
-     console.log("AppPageLogic: AppUser is guest. Showing sign-in page.");
-     return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
-        <div className="text-center space-y-6 w-full max-w-md p-8 bg-card shadow-xl rounded-2xl border border-border">
-            <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" />
-            <h1 className="text-4xl font-extrabold text-primary drop-shadow-md">Welcome to Vibe Check!</h1>
-            <p className="text-lg text-muted-foreground">
-                Your personal space to track moods, smash quests, and ride the good vibes.
-            </p>
-            
-            <FirebaseUIWidget />
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">
-                  Or
-                </span>
-              </div>
-            </div>
-
-            <Button onClick={handleGuestSignIn} variant="outline" className="w-full text-lg py-3 shadow-md hover:shadow-lg">
-                <UserIcon className="mr-2 h-5 w-5" /> Continue as Guest
-            </Button>
-
-             <p className="text-xs text-muted-foreground mt-6">
-                By continuing, you agree to our imaginary Terms of Service and Privacy Policy.
-            </p>
-        </div>
-      </div>
-    );
+  // If Firebase user is authenticated, show main app.
+  if (authUser) {
+     console.log("AppPageLogic: Firebase authUser exists. Rendering MainAppInterface.");
+     return <MainAppInterface />;
   }
-  console.log("AppPageLogic: AppUser is authenticated. Rendering MainAppInterface.");
-  return <MainAppInterface />;
+
+  // If no Firebase user, but guest session is active (button clicked), show main app with guest user.
+  // AuthContext ensures appUser is a guest profile in this scenario.
+  if (guestSessionActive && appUser.id.startsWith('guest_')) {
+    console.log("AppPageLogic: Guest session is active. Rendering MainAppInterface for guest.");
+    return <MainAppInterface />;
+  }
+  
+  // Otherwise (no Firebase user, guest session not active), show login options.
+  // AuthContext would have set appUser to a guest profile in the background,
+  // but we present the choice to the user.
+  console.log("AppPageLogic: No Firebase authUser and guest session not active. Showing login/guest choice page.");
+  return (
+    <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
+      <div className="text-center space-y-6 w-full max-w-md p-8 bg-card shadow-xl rounded-2xl border border-border">
+          <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" />
+          <h1 className="text-4xl font-extrabold text-primary drop-shadow-md">Welcome to Vibe Check!</h1>
+          <p className="text-lg text-muted-foreground">
+              Your personal space to track moods, smash quests, and ride the good vibes.
+          </p>
+          
+          <FirebaseUIWidget />
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">
+                Or
+              </span>
+            </div>
+          </div>
+
+          <Button onClick={handleGuestSignIn} variant="outline" className="w-full text-lg py-3 shadow-md hover:shadow-lg">
+              <UserIcon className="mr-2 h-5 w-5" /> Continue as Guest
+          </Button>
+
+            <p className="text-xs text-muted-foreground mt-6">
+              By continuing, you agree to our imaginary Terms of Service and Privacy Policy.
+          </p>
+      </div>
+    </div>
+  );
 }

@@ -28,10 +28,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   useEffect(() => {
     if (user) {
+      // Ensure moodLogs is an array before passing to predictHormone
+      const moodLogsForPrediction = Array.isArray(user.moodLogs) ? user.moodLogs : [];
+      const updatedUser = { ...user, moodLogs: moodLogsForPrediction };
+
       setUser(prevUser => {
         if (!prevUser) return null;
-        const moodLogsForPrediction = Array.isArray(prevUser.moodLogs) ? prevUser.moodLogs : [];
-        const newHormones = predictHormone({ ...prevUser, moodLogs: moodLogsForPrediction });
+        // Use the user with guaranteed moodLogs array for prediction
+        const newHormones = predictHormone(updatedUser); 
         if (JSON.stringify(prevUser.hormoneLevels) !== JSON.stringify(newHormones)) {
           console.log(`UserContext: Updating hormone levels for user ${prevUser.id}.`);
           return { ...prevUser, hormoneLevels: newHormones };
@@ -39,6 +43,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return prevUser;
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, JSON.stringify(user?.completedTasks), JSON.stringify(user?.moodLogs)]);
 
 
