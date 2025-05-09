@@ -1,4 +1,3 @@
-
 'use client';
 
 import type { User } from 'firebase/auth';
@@ -27,18 +26,24 @@ const FirebaseUIWidget: React.FC<FirebaseUIWidgetProps> = ({ onSignInSuccess, ui
     const loadFirebaseui = async () => {
       // Dynamically import firebaseui
       const firebaseuiModule = await import('firebaseui');
-      ui = firebaseuiModule.auth.AuthUI.getInstance() || new firebaseuiModule.auth.AuthUI(auth); // Use existing instance or create new
+      // Ensure auth is initialized before creating AuthUI instance
+      if (!auth) {
+        console.error("Firebase Auth instance is not available. FirebaseUI cannot be initialized.");
+        toast({
+          title: "Initialization Error",
+          description: "Firebase authentication service is not ready. Please refresh or check console.",
+          variant: "destructive",
+        });
+        return;
+      }
+      ui = firebaseuiModule.auth.AuthUI.getInstance() || new firebaseuiModule.auth.AuthUI(auth); 
 
-      if (elementRef.current && !userLoggedIn && auth) {
+      if (elementRef.current && !userLoggedIn) {
         const finalUiConfig: firebaseui.auth.Config = customUiConfig || {
-          signInFlow: 'popup', // Or 'redirect'
+          signInFlow: 'popup', 
           signInOptions: [
             GoogleAuthProvider.PROVIDER_ID,
             EmailAuthProvider.PROVIDER_ID,
-            // Add other providers like Facebook, Twitter, GitHub, etc.
-            // firebase.auth.FacebookAuthProvider.PROVIDER_ID,
-            // firebase.auth.TwitterAuthProvider.PROVIDER_ID,
-            // firebase.auth.GithubAuthProvider.PROVIDER_ID,
           ],
           callbacks: {
             signInSuccessWithAuthResult: (authResult, redirectUrl) => {
@@ -50,47 +55,62 @@ const FirebaseUIWidget: React.FC<FirebaseUIWidgetProps> = ({ onSignInSuccess, ui
               if (onSignInSuccess) {
                 return onSignInSuccess(authResult, redirectUrl);
               }
-              // If onSignInSuccess doesn't handle redirection (returns true),
-              // FirebaseUI will not redirect. We can handle it here if needed.
-              // For example, router.push('/dashboard');
-              return false; // Prevent FirebaseUI from redirecting, we handle it or AuthContext does.
+              return false; 
             },
             signInFailure: (error) => {
               console.error('FirebaseUI Sign-In Error:', error);
-              toast({
-                title: "Sign-In Glitch 😬",
-                description: error.message || `Couldn't sign you in. Error code: ${error.code}`,
-                variant: "destructive",
-              });
-              return Promise.resolve(); // Or Promise.reject(error) if you want to propagate
+              if (error.code === 'auth/configuration-not-found') {
+                toast({
+                  title: "Firebase Config Issue ⚙️",
+                  description: "Sign-in method not enabled. Please enable Google and Email/Password sign-in in your Firebase project console (Authentication > Sign-in method). Then, ensure your .env.local file is correct and restart the app.",
+                  variant: "destructive",
+                  duration: 15000, // Longer duration for important messages
+                });
+              } else {
+                toast({
+                  title: "Sign-In Glitch 😬",
+                  description: error.message || `Couldn't sign you in. Error code: ${error.code}`,
+                  variant: "destructive",
+                });
+              }
+              return Promise.resolve(); 
             },
             uiShown: () => {
-              // This is called when the UI is shown.
-              // You can hide a loader here if you have one.
+              // Loader can be hidden here
             }
           },
-          // tosUrl and privacyPolicyUrl are optional.
-          // tosUrl: '/terms-of-service',
-          // privacyPolicyUrl: '/privacy-policy',
-          credentialHelper: firebaseuiModule.auth.CredentialHelper.GOOGLE_YOLO, // Or NONE, ACCOUNT_CHOOSER_COM
+          // tosUrl: '/terms-of-service', // Optional
+          // privacyPolicyUrl: '/privacy-policy', // Optional
+          credentialHelper: firebaseuiModule.auth.CredentialHelper.GOOGLE_YOLO, 
         };
         
-        ui.start(elementRef.current, finalUiConfig);
+        try {
+            ui.start(elementRef.current, finalUiConfig);
+        } catch (e: any) {
+            console.error("Error starting FirebaseUI:", e);
+            toast({
+                title: "FirebaseUI Start Error",
+                description: `Could not display sign-in options: ${e.message}. Check console.`,
+                variant: "destructive"
+            });
+        }
       }
     };
     
     loadFirebaseui();
 
-    // Cleanup function
     return () => {
       if (ui) {
-        ui.reset(); // Reset FirebaseUI instance
+        try {
+            ui.reset(); 
+        } catch (e) {
+            console.warn("Error resetting FirebaseUI:", e);
+        }
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customUiConfig, onSignInSuccess, userLoggedIn]); // Rerun if config changes or user logs in/out
+  }, [customUiConfig, onSignInSuccess, userLoggedIn, toast]); // Added toast to dependency array
 
-  // If user is logged in, perhaps show nothing or a loading indicator while AuthContext updates
   if (userLoggedIn) {
     return (
         <div className="text-center p-4">
