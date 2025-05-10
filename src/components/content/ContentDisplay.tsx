@@ -6,9 +6,9 @@ import type { Content } from "@/types/content";
 import { Button } from "@/components/ui/button";
 import ContentService from "@/services/ContentService";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BookOpen, PlayCircle, ExternalLink } from "lucide-react";
-import { getRecommendedContent } from "../../../ai/flows/recommended-content"; // Changed from alias
-import type { RecommendedContentOutput } from "../../../ai/flows/recommended-content"; // Changed from alias
+import { BookOpen, PlayCircle, ExternalLink, Loader2 } from "lucide-react";
+import { getRecommendedContent } from "@/ai/flows/recommended-content"; 
+import type { RecommendedContentOutput } from "@/ai/flows/recommended-content"; 
 import { useUser } from "@/contexts/UserContext"; 
 import { useMoodLogs } from "@/contexts/MoodLogsContext"; 
 
@@ -18,40 +18,53 @@ export default function ContentDisplay() {
   const [isClient, setIsClient] = useState(false);
   const [contentService, setContentService] = useState<ContentService | null>(null);
   const [recommendedContent, setRecommendedContent] = useState<RecommendedContentOutput | null>(null);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] = useState(false);
   const { user } = useUser(); 
   const { moodLogs } = useMoodLogs(); 
 
   useEffect(() => {
     setIsClient(true);
-    setContentService(new ContentService());
+    const service = new ContentService();
+    setContentService(service);
+    setContentList(service.getContent());
   }, []);
-
-  useEffect(() => {
-    if (contentService) {
-      setContentList(contentService.getContent());
-    }
-  }, [contentService]);
 
   
   useEffect(() => {
     if (isClient && user && moodLogs && moodLogs.length > 0) { 
       const fetchRecommendedContent = async () => {
+        setIsLoadingRecommendations(true);
         try {
           const result = await getRecommendedContent({
             moodLogs: moodLogs,
-            hormoneLevels: user.hormoneLevels,
+            // Ensure hormoneLevels and tasks exist on user object, provide defaults if not
+            hormoneLevels: user.hormoneLevels || { dopamine: 50, adrenaline: 50, cortisol: 50, serotonin: 50 },
             activities: user.tasks?.map(task => task.name) || [], 
           });
           setRecommendedContent(result);
         } catch (error) {
           console.error("Failed to get recommended content:", error);
-          setRecommendedContent({ recommendations: ["10-Minute Guided Meditation for Stress Relief"] });
+          // Fallback: pick a few random items from the full list
+          if (contentService) {
+            const allContent = contentService.getContent();
+            const shuffled = allContent.sort(() => 0.5 - Math.random());
+            setRecommendedContent({ recommendations: shuffled.slice(0, Math.min(2, shuffled.length)).map(c => c.title) });
+          } else {
+            setRecommendedContent({ recommendations: ["10-Minute Guided Meditation for Stress Relief"] });
+          }
+        } finally {
+          setIsLoadingRecommendations(false);
         }
       };
       fetchRecommendedContent();
-    } else if (isClient && contentList.length > 0 && (!user || !moodLogs || moodLogs.length === 0)) {
+    } else if (isClient && contentService) {
+      // If no user/mood data, show a few random items from all content
+      const allContent = contentService.getContent();
+      const shuffled = allContent.sort(() => 0.5 - Math.random());
+      setRecommendedContent({ recommendations: shuffled.slice(0, Math.min(3, shuffled.length)).map(c => c.title) });
     }
-  }, [isClient, user, moodLogs, contentList.length]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isClient, user, moodLogs, contentService]); 
 
   if (!isClient || !contentService) {
     return (
@@ -70,9 +83,11 @@ export default function ContentDisplay() {
   }
 
   
-  const filteredContentList = recommendedContent?.recommendations && recommendedContent.recommendations.length > 0
-    ? contentList.filter(content => recommendedContent.recommendations.includes(content.title))
-    : contentList; 
+  const itemsToDisplay = isLoadingRecommendations 
+    ? [] // Show nothing or a loader while actively fetching AI recommendations
+    : recommendedContent?.recommendations && recommendedContent.recommendations.length > 0
+      ? contentList.filter(content => recommendedContent.recommendations.includes(content.title))
+      : contentList.slice(0,3); // Fallback to showing first 3 if no recommendations yet
 
   return (
     <Card className="shadow-lg" aria-labelledby="content-title">
@@ -84,11 +99,16 @@ export default function ContentDisplay() {
         <CardDescription>Handpicked vids, reads, and listens to boost your vibe. Low key, it's fire. 🔥</CardDescription> 
       </CardHeader>
       <CardContent>
-      {filteredContentList.length === 0 ? (
+      {isLoadingRecommendations ? (
+        <div className="flex flex-col items-center justify-center h-[200px]">
+            <Loader2 className="h-12 w-12 text-accent animate-spin mb-4" aria-hidden="true" />
+            <p className="text-muted-foreground">AI is curating your vibes...</p>
+        </div>
+      ) : itemsToDisplay.length === 0 ? (
          <p className="text-muted-foreground text-center py-10">Nothin' new here yet, fam. Peep back later for some fire content! Bet. 😉</p> 
       ) : (
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="List of curated content">
-          {filteredContentList.map((content) => (
+          {itemsToDisplay.map((content) => (
             <li key={content.id}>
               <Card className="p-4 rounded-xl shadow-md bg-card/90 hover:shadow-lg transition-shadow border-border/70 flex flex-col justify-between h-full">
                 <div>
