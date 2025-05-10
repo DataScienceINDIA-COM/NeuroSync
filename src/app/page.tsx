@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -47,6 +48,7 @@ import {
 } from "@/components/ui/accordion";
 import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
 import { auth } from '@/lib/firebase';
+import { OnboardingDialog } from '@/components/onboarding/OnboardingDialog';
 
 
 function MainAppInterface() {
@@ -61,6 +63,7 @@ function MainAppInterface() {
   const [isSendingNotification, setIsSendingNotification] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
   const [editingName, setEditingName] = useState<string>("");
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
 
   const taskService = useMemo(() => {
     if (!isClient) return null; 
@@ -71,7 +74,17 @@ function MainAppInterface() {
 
   useEffect(() => {
     setIsClient(true); 
+    if (typeof window !== 'undefined' && !localStorage.getItem('onboardingCompletedV2')) {
+      setShowOnboarding(true);
+    }
   }, []);
+
+  const handleOnboardingComplete = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('onboardingCompletedV2', 'true');
+    }
+    setShowOnboarding(false);
+  };
 
   // FCM Token Setup and Foreground Message Listener Effect
   useEffect(() => {
@@ -332,6 +345,7 @@ function MainAppInterface() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
+      {showOnboarding && <OnboardingDialog isOpen={showOnboarding} onComplete={handleOnboardingComplete} />}
       <Header>
         <Header.AuthSection
           authUser={authUser} 
