@@ -10,35 +10,14 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { uploadAvatarToStorage } from '@/lib/firebase-storage';
-import { validateAvatarDescription } from './validate-avatar-description-flow'; 
-// It's good practice to check adminInitError if firebase-storage operations were to use Admin SDK
-// For now, firebase-storage.ts uses client SDK, which is problematic for server flows.
-// This flow should ideally use Admin SDK for storage operations if they happen server-side.
-// import { adminInitError } from '@/lib/firebase-admin';
+import { validateAvatarDescription } from './validate-avatar-description-flow';
+import { GenerateAvatarInputSchema, GenerateAvatarOutputSchema } from '@/ai/schemas';
 
-
-export const GenerateAvatarInputSchema = z.object({
-  userId: z.string().describe('The ID of the user requesting the avatar.'),
-  description: z.string().min(10).max(200).describe('A detailed description of the avatar to be generated. Min 10, Max 200 characters.'),
-  previousAvatarPath: z.string().optional().describe('The Firebase Storage path of the previous avatar, if any, to be deleted.')
-});
 export type GenerateAvatarInput = z.infer<typeof GenerateAvatarInputSchema>;
-
-const GenerateAvatarOutputSchema = z.object({
-  imageUrl: z.string().describe("The URL of the generated avatar image hosted on Firebase Storage."),
-  imagePath: z.string().describe("The Firebase Storage path for the generated avatar image."),
-  feedback: z.string().optional().describe("Feedback on the avatar description if it was modified or suggestions for improvement.")
-});
 export type GenerateAvatarOutput = z.infer<typeof GenerateAvatarOutputSchema>;
 
 
 export async function generateAvatar(input: GenerateAvatarInput): Promise<GenerateAvatarOutput> {
-  // Example of checking admin error if operations were to use Admin SDK
-  // if (adminInitError) {
-  //   console.error("Firebase Admin SDK not initialized. Cannot generate avatar related to storage ops.", adminInitError.message);
-  //   throw new Error("Avatar generation service unavailable due to server configuration error.");
-  // }
-
   // Validate the description
   const validationResult = await validateAvatarDescription({ description: input.description });
   if (!validationResult.isValid) {
@@ -73,8 +52,6 @@ export async function generateAvatar(input: GenerateAvatarInput): Promise<Genera
     };
   } catch (error) {
     console.error('Failed to upload avatar to Firebase Storage:', error);
-    // It might be useful to delete the generated AI image if storage upload fails,
-    // but data URIs are transient unless stored.
     throw new Error('Failed to store the generated avatar. Please try again.');
   }
 }
@@ -88,10 +65,5 @@ const generateAvatarFlow = ai.defineFlow(
     inputSchema: GenerateAvatarInputSchema,
     outputSchema: GenerateAvatarOutputSchema,
   },
-  generateAvatar // Use the async function directly
+  generateAvatar 
 );
-
-// Export the main function to be called by server actions/components
-// The flow definition itself doesn't need to be exported if it's only called internally or via Genkit tools.
-// However, exporting the wrapper 'generateAvatar' is good practice.
-// export { generateAvatar }; // This is implicitly exported by being a top-level function.

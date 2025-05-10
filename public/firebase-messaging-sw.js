@@ -4,7 +4,27 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
-// IMPORTANT: REPLACE THE PLACEHOLDER VALUES BELOW WITH YOUR ACTUAL FIREBASE PROJECT CONFIGURATION
+// **************************************************************************************
+// !! IMPORTANT !! IMPORTANT !! IMPORTANT !! IMPORTANT !! IMPORTANT !! IMPORTANT !!
+//
+// YOU MUST REPLACE THE PLACEHOLDER VALUES BELOW WITH YOUR ACTUAL FIREBASE PROJECT CONFIGURATION.
+// THESE VALUES SHOULD MATCH THOSE IN YOUR `.env.local` FILE (for NEXT_PUBLIC_ variables).
+//
+// FAILURE TO DO SO WILL RESULT IN PUSH NOTIFICATIONS NOT WORKING.
+// THIS FILE IS SERVED STATICALLY AND DOES NOT AUTOMATICALLY PICK UP `.env.local` VALUES.
+//
+// REQUIRED VALUES:
+// - apiKey
+// - authDomain
+// - projectId
+// - storageBucket
+// - messagingSenderId (This is CRUCIAL for FCM)
+// - appId
+//
+// OPTIONAL BUT RECOMMENDED:
+// - measurementId (If you use Firebase Analytics)
+//
+// **************************************************************************************
 const firebaseConfig = {
   apiKey: "YOUR_NEXT_PUBLIC_FIREBASE_API_KEY",
   authDomain: "YOUR_NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
@@ -17,7 +37,11 @@ const firebaseConfig = {
 
 // Initialize the Firebase app in the service worker
 if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
+  try {
+    firebase.initializeApp(firebaseConfig);
+  } catch (e) {
+    console.error("Error initializing Firebase in Service Worker. Ensure firebaseConfig is correctly populated.", e, firebaseConfig);
+  }
 } else {
   firebase.app(); // if already initialized, use that one
 }

@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Moderates community post content using an AI agent.
@@ -10,19 +11,9 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { CommunityModeratorProfile } from '@/config/agentProfiles';
+import { ModerateCommunityPostInputSchema, ModerateCommunityPostOutputSchema } from '@/ai/schemas';
 
-export const ModerateCommunityPostInputSchema = z.object({
-  postContent: z.string().min(1).max(5000).describe('The content of the community post to be moderated.'),
-  // Optional: Add userId or other context if needed by the moderator
-  // userId: z.string().optional().describe('The ID of the user who created the post.'),
-});
 export type ModerateCommunityPostInput = z.infer<typeof ModerateCommunityPostInputSchema>;
-
-export const ModerateCommunityPostOutputSchema = z.object({
-  isAppropriate: z.boolean().describe('Whether the post content is deemed appropriate.'),
-  reason: z.string().optional().describe('The reason for moderation if the content is inappropriate.'),
-  categories: z.array(z.string()).optional().describe('Categories of inappropriateness (e.g., hate_speech, spam).'),
-});
 export type ModerateCommunityPostOutput = z.infer<typeof ModerateCommunityPostOutputSchema>;
 
 // This is the function that will be imported and used.

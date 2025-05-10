@@ -17,36 +17,37 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
-const isApiKeySet = !!firebaseConfig.apiKey && typeof firebaseConfig.apiKey === 'string' && firebaseConfig.apiKey.trim() !== '';
-const isProjectIdSet = !!firebaseConfig.projectId && typeof firebaseConfig.projectId === 'string' && firebaseConfig.projectId.trim() !== '';
-const isAuthDomainSet = !!firebaseConfig.authDomain && typeof firebaseConfig.authDomain === 'string' && firebaseConfig.authDomain.trim() !== '';
-
-let app: FirebaseApp;
-let db: Firestore;
-let auth: Auth;
-let storage: FirebaseStorage;
-let functions: Functions;
-let database: Database;
+let app: FirebaseApp | undefined = undefined; // Ensure app can be undefined if init fails
+let db: Firestore | undefined = undefined;
+let auth: Auth | undefined = undefined;
+let storage: FirebaseStorage | undefined = undefined;
+let functions: Functions | undefined = undefined;
+let database: Database | undefined = undefined;
 let analytics: Analytics | null = null;
 let firebaseInitializationError: Error | null = null;
 
-if (!isApiKeySet || !isProjectIdSet || !isAuthDomainSet) {
-  const missingVars: string[] = [];
-  if (!isApiKeySet) {
-    missingVars.push(`NEXT_PUBLIC_FIREBASE_API_KEY (current value: '${firebaseConfig.apiKey === undefined ? "undefined" : firebaseConfig.apiKey}')`);
-  }
-  if (!isProjectIdSet) {
-    missingVars.push(`NEXT_PUBLIC_FIREBASE_PROJECT_ID (current value: '${firebaseConfig.projectId === undefined ? "undefined" : firebaseConfig.projectId}')`);
-  }
-  if (!isAuthDomainSet) {
-    missingVars.push(`NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN (current value: '${firebaseConfig.authDomain === undefined ? "undefined" : firebaseConfig.authDomain}')`);
-  }
+// Check for essential Firebase config variables
+const essentialConfigs: Array<keyof typeof firebaseConfig> = [
+  'apiKey', 
+  'authDomain', 
+  'projectId', 
+  'storageBucket', 
+  'messagingSenderId', 
+  'appId'
+];
 
-  const errorMessage = `CRITICAL: Firebase configuration error. The following environment variable(s) are missing, empty, or invalid: 
-${missingVars.join('\n')}
-Is API Key set? ${isApiKeySet}
-Is Project ID set? ${isProjectIdSet}
-Is Auth Domain set? ${isAuthDomainSet}
+const missingOrInvalidConfigs = essentialConfigs.filter(key => {
+  const value = firebaseConfig[key];
+  return !value || typeof value !== 'string' || value.trim() === '' || value.includes('YOUR_');
+});
+
+if (missingOrInvalidConfigs.length > 0) {
+  const errorDetails = missingOrInvalidConfigs.map(key => 
+    `${key} (current value: '${firebaseConfig[key] === undefined ? "undefined" : String(firebaseConfig[key])}')`
+  ).join('\n  ');
+
+  const errorMessage = `CRITICAL: Firebase configuration error. The following essential environment variable(s) are missing, empty, invalid, or still using placeholder values:
+  ${errorDetails}
 Please ensure these are correctly set in your .env.local file.
 Refer to your Firebase project settings (Project settings > General > Your apps > Firebase SDK snippet) to get these values.
 Also, ensure Authentication providers (e.g., Google, Email/Password) are enabled in your Firebase project console (Authentication > Sign-in method).
@@ -54,9 +55,12 @@ IMPORTANT: You MUST restart your development server (e.g., 'npm run dev') after 
   
   console.error(errorMessage);
   firebaseInitializationError = new Error(errorMessage);
-  // Not throwing here to allow build to proceed for "Module not found" diagnosis.
-  // The app will likely fail at runtime if Firebase services are used.
+  // To prevent the app from attempting to use uninitialized Firebase services:
+  // Throw error here to halt further execution relying on Firebase client SDK.
+  // This makes the "API key not valid" or other Firebase client errors less likely to obscure the root cause.
+  // throw firebaseInitializationError; // Commented out to allow build to proceed for Next.js error diagnosis, but in prod this should throw.
 }
+
 
 if (!firebaseInitializationError) {
   if (!getApps().length) {
@@ -70,7 +74,7 @@ if (!firebaseInitializationError) {
     app = getApp();
   }
 
-  if (!firebaseInitializationError && app!) {
+  if (app && !firebaseInitializationError) { // Ensure app is defined before using it
     try {
       db = getFirestore(app);
       auth = getAuth(app);
@@ -81,7 +85,7 @@ if (!firebaseInitializationError) {
 
       if (typeof window !== 'undefined') {
         isSupported().then((supported) => {
-          if (supported) {
+          if (supported && firebaseConfig.measurementId) { // Only init analytics if measurementId is present
             analytics = getAnalytics(app);
           }
         });
@@ -89,21 +93,15 @@ if (!firebaseInitializationError) {
     } catch (error: any) {
       console.error('Error initializing Firebase services after app initialization:', error.message);
       firebaseInitializationError = new Error(`Firebase service initialization failed: ${error.message || error.toString()}.`);
+      // Nullify services if their initialization fails
+      db = undefined;
+      auth = undefined;
+      storage = undefined;
+      functions = undefined;
+      database = undefined;
+      analytics = null;
     }
   }
-} else {
-  // @ts-ignore
-  app = null; 
-  // @ts-ignore
-  db = null;
-  // @ts-ignore
-  auth = null;
-  // @ts-ignore
-  storage = null;
-  // @ts-ignore
-  functions = null;
-  // @ts-ignore
-  database = null;
 }
 
 
@@ -121,6 +119,6 @@ const handleSignOut = async (): Promise<void> => {
   }
 };
 
-const googleAuthProvider = new GoogleAuthProvider();
+const googleAuthProvider = auth ? new GoogleAuthProvider() : undefined; // Initialize only if auth is available
 
 export { app, db, auth, storage, functions, database, analytics, googleAuthProvider, handleSignOut, firebaseInitializationError };

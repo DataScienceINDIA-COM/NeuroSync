@@ -1,89 +1,101 @@
-## Environment Setup
-always append to this file, dont erase
-To set up the development environment for this project, follow these steps:
+## Project Setup and Local Development
 
-1.  **Prerequisites:**
-    *   Ensure you have Node.js (version 18 or later recommended) and npm or Yarn installed. Refer to the [Installed Tools](#installed-tools) section to verify installed tools and their versions.
+This project is built with **React**, **Next.js**, **Firebase**, and **Genkit**. It utilizes **GSAP** for advanced animations and interactions. To get the project up and running on your local machine, follow these steps:
 
-2.  **Create `.env.local` File:**
-    *   In the root directory of the project, create a file named `.env.local`.
-    *   This file will store your Firebase project configuration and other sensitive API keys.
-    *   **Important:** This file should NOT be committed to version control. Add `.env.local` to your `.gitignore` file if it's not already there.
-    *   Populate `.env.local` with the following variables, replacing the placeholder values with your actual Firebase project credentials:
+### 1. Clone the Repository
+Open your terminal or command prompt and clone the project repository.
 
-        ```plaintext
-        NEXT_PUBLIC_FIREBASE_API_KEY="YOUR_API_KEY"
-        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="YOUR_PROJECT_ID.firebaseapp.com"
-        NEXT_PUBLIC_FIREBASE_PROJECT_ID="YOUR_PROJECT_ID"
-        NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="YOUR_PROJECT_ID.appspot.com"
-        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="YOUR_MESSAGING_SENDER_ID"
-        NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_APP_ID"
-        NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="YOUR_MEASUREMENT_ID"
-        NEXT_PUBLIC_FIREBASE_VAPID_KEY="YOUR_FIREBASE_MESSAGING_VAPID_KEY" # For Web Push Notifications
-        # Optional: If using Firebase Admin SDK with a service account file locally
-        # GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/serviceAccountKey.json"
-        # Optional: If your Firebase Cloud Functions are in a specific region
-        # NEXT_PUBLIC_FIREBASE_LOCATION_ID="your-functions-region" 
-        ```
-    *   You can find these values in your Firebase project settings:
-        1.  Go to the [Firebase Console](https://console.firebase.google.com/).
-        2.  Select your project.
-        3.  Click on the gear icon (Project settings) in the sidebar.
-        4.  Under the "General" tab, in the "Your apps" section, find your web app. The Firebase SDK snippet will contain most of these values.
-        5.  For `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, go to Project settings > Cloud Messaging tab. Under "Web configuration", find "Web Push certificates" and copy the "Key pair".
+### 2. Environment Setup
+A critical step for ensuring the application runs correctly is setting up your environment variables.
 
-3.  **Enable Firebase Authentication Providers:**
-    *   For FirebaseUI to work correctly with sign-in methods like Google Sign-In or Email/Password, you must enable them in your Firebase project. This is a common reason for `auth/configuration-not-found` or similar errors.
-    *   Go to the [Firebase Console](https://console.firebase.google.com/).
-    *   Select your project.
-    *   In the left sidebar, navigate to "Authentication".
-    *   Click on the "Sign-in method" tab (or "Get started" if it's your first time).
-    *   Enable the providers you intend to use (e.g., "Google", "Email/Password"). For each provider, follow the on-screen instructions to configure it. For Google Sign-In, you'll typically need to provide a project support email.
+#### Create `.env.local` File
+*   In the root directory of the project, create a file named `.env.local`.
+*   This file will store your Firebase project configuration and other sensitive API keys.
+*   **Important:** This file is gitignored and should **NEVER** be committed to version control.
+*   Populate `.env.local` with the following variables, replacing the placeholder values (e.g., `"YOUR_API_KEY"`) with your actual Firebase project credentials and other necessary keys. Refer to the `.env` file in the root directory as a template for all required variables.
 
-4.  **Install Dependencies:**
-    *   Open your terminal in the project's root directory and run:
-        ```bash
-        npm install
-        # or
-        yarn install
-        ```
+    ```plaintext
+    # Firebase Project Configuration (Client-Side)
+    NEXT_PUBLIC_FIREBASE_API_KEY="YOUR_API_KEY"
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="YOUR_PROJECT_ID.firebaseapp.com"
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID="YOUR_PROJECT_ID"
+    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="YOUR_PROJECT_ID.appspot.com"
+    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="YOUR_MESSAGING_SENDER_ID"
+    NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_APP_ID"
+    NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="YOUR_MEASUREMENT_ID" # Optional
 
-5.  **Configure Firebase Service Worker (for Push Notifications):**
-    *   Open the file `public/firebase-messaging-sw.js`.
-    *   This file contains a `firebaseConfig` object with placeholder values (e.g., `"YOUR_NEXT_PUBLIC_FIREBASE_API_KEY"`).
-    *   You **MUST** replace these placeholders with your actual Firebase project configuration values. These values should match those in your `.env.local` file.
-    *   **Example (in `public/firebase-messaging-sw.js`):**
-        ```javascript
-        // ...
-        const firebaseConfig = {
-          apiKey: "YOUR_ACTUAL_API_KEY_HERE", // Replace
-          authDomain: "YOUR_ACTUAL_AUTH_DOMAIN_HERE", // Replace
-          projectId: "YOUR_ACTUAL_PROJECT_ID_HERE", // Replace
-          storageBucket: "YOUR_ACTUAL_STORAGE_BUCKET_HERE", // Replace
-          messagingSenderId: "YOUR_ACTUAL_MESSAGING_SENDER_ID_HERE", // Replace
-          appId: "YOUR_ACTUAL_APP_ID_HERE", // Replace
-          measurementId: "YOUR_ACTUAL_MEASUREMENT_ID_HERE" // Replace (Optional)
-        };
-        // ...
-        ```
-    *   **Crucial:** The `messagingSenderId` in this file is especially important for FCM to work correctly in the background.
+    # Firebase Cloud Messaging (FCM) VAPID Key (Client-Side for Web Push)
+    NEXT_PUBLIC_FIREBASE_VAPID_KEY="YOUR_FCM_VAPID_KEY"
 
-6.  **Run the Development Server:**
-    *   After successful installation, start the Next.js development server:
-        ```bash
-        npm run dev
-        # or
-        yarn dev
-        ```
-    *   The application should now be running, typically at `http://localhost:3000` (or the port specified in your `package.json` if different, like `http://localhost:9002` for this project).
+    # Firebase Admin SDK Configuration (Server-Side)
+    # For local dev, path to your service account JSON. For production, use platform's env var management.
+    # GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/serviceAccountKey.json" 
 
-7.  **Restart After Environment Variable Changes:**
-    *   **Crucial:** If you modify your `.env.local` file (or any `.env` file), you MUST restart your Next.js development server for the changes to take effect.
+    # Optional: Firebase Cloud Functions Region
+    # NEXT_PUBLIC_FIREBASE_LOCATION_ID="your-functions-region"
 
-By following these steps, you should have a correctly configured development environment, and Firebase authentication issues like `auth/configuration-not-found` should be resolved, and push notifications should be functional.
+    # Optional: Genkit / Google AI API Key (if not using service account for AI calls)
+    # GOOGLE_API_KEY="YOUR_GOOGLE_AI_API_KEY"
+    ```
+*   **Finding Firebase Values:** You can find most `NEXT_PUBLIC_FIREBASE_` values in your Firebase project settings:
+    1.  Go to the [Firebase Console](https://console.firebase.google.com/).
+    2.  Select your project.
+    3.  Click on the gear icon (Project settings) in the sidebar.
+    4.  Under the "General" tab, in the "Your apps" section, find your web app. The Firebase SDK snippet will contain these values.
+    5.  For `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, go to Project settings > Cloud Messaging tab. Under "Web configuration", find "Web Push certificates" and copy the "Key pair".
+*   **`GOOGLE_APPLICATION_CREDENTIALS`:** For server-side Firebase Admin SDK operations (like sending FCM messages from the backend, interacting with Firestore/Storage with admin privileges), you need service account credentials.
+    *   **Local Development:** Download your service account key JSON file from Firebase Console (Project settings > Service accounts > Generate new private key). Set `GOOGLE_APPLICATION_CREDENTIALS` in `.env.local` to the *absolute path* of this JSON file. **DO NOT COMMIT THIS JSON FILE.**
+    *   **Production/Deployment:** Consult your hosting provider's documentation for managing service account credentials (e.g., Vercel environment variables, Google Cloud service account roles).
 
-# NeuroSync Project Roadmap
-## AI Interaction Log
+#### Enable Firebase Authentication Providers
+*   For FirebaseUI and general authentication to work (e.g., Google Sign-In, Email/Password), you **MUST** enable these providers in your Firebase project.
+*   Go to the [Firebase Console](https://console.firebase.google.com/) > Your Project > Authentication > Sign-in method tab.
+*   Enable each provider you intend to use (e.g., "Google", "Email/Password"). Follow on-screen instructions. For Google Sign-In, a project support email is usually required.
+*   **Failure to do this is a common cause of `auth/configuration-not-found` errors.**
+
+#### Configure Firebase Service Worker (`public/firebase-messaging-sw.js`)
+*   The file `public/firebase-messaging-sw.js` handles background push notifications.
+*   It contains a `firebaseConfig` object with placeholder values (e.g., `"YOUR_NEXT_PUBLIC_FIREBASE_API_KEY"`).
+*   You **MUST** manually replace these placeholders with your actual Firebase project configuration values. These values **MUST** match those in your `.env.local` file.
+    ```javascript
+    // Example within public/firebase-messaging-sw.js:
+    const firebaseConfig = {
+      apiKey: "YOUR_ACTUAL_API_KEY_HERE", // Replace with value from .env.local
+      authDomain: "YOUR_ACTUAL_AUTH_DOMAIN_HERE", // Replace
+      projectId: "YOUR_ACTUAL_PROJECT_ID_HERE", // Replace
+      storageBucket: "YOUR_ACTUAL_STORAGE_BUCKET_HERE", // Replace
+      messagingSenderId: "YOUR_ACTUAL_MESSAGING_SENDER_ID_HERE", // Crucial: Replace
+      appId: "YOUR_ACTUAL_APP_ID_HERE", // Replace
+      measurementId: "YOUR_ACTUAL_MEASUREMENT_ID_HERE" // Optional: Replace
+    };
+    ```
+*   **Crucial:** The `messagingSenderId` in this file is especially important for FCM to work correctly in the background.
+*   **Important:** Since this file is static, any changes to your Firebase config in `.env.local` require you to manually update this file as well.
+
+### 3. Install Dependencies
+Open your terminal in the project's root directory and run:
+```bash
+npm install
+# or
+yarn install
+```
+If you encounter `ERESOLVE` errors related to peer dependencies (e.g., between `firebase` and `firebaseui`), try to align the versions in `package.json` or, as a temporary workaround for development, you might use `npm install --force` or `npm install --legacy-peer-deps`. However, resolving the conflict by adjusting versions is preferred for stability.
+
+### 4. Run the Development Server
+After successful installation and configuration:
+```bash
+npm run dev
+# or
+yarn dev
+```
+The application should typically be running at `http://localhost:9002` (or the port specified in `package.json`).
+
+### 5. Restart After Environment Variable Changes
+**Crucial:** If you modify your `.env.local` file (or any `.env` file), you **MUST** restart your Next.js development server for the changes to take effect.
+
+By following these steps, you should have a correctly configured development environment, and issues related to Firebase configuration (like `API key not valid` or `auth/configuration-not-found`) should be resolved, and push notifications should be functional.
+
+## NeuroSync Project Roadmap
 This section is for AI agents to log their activities and insights.
 
 ### Progress Updates
@@ -95,6 +107,10 @@ This section is for AI agents to log their activities and insights.
 - Set up agent profiles in `src/config/agentProfiles.ts` for `AICoach` and `CommunityModerator`.
 - Implemented `IntegrationService` in `src/services/integrationService.ts` to manage connections with external wellness platforms. This service currently uses localStorage for persistence and simulates OAuth flows.
 - Implemented real-time notifications using Firebase Cloud Messaging (FCM). Added service worker for background notifications and enhanced foreground message handling with toasts.
+- Enhanced Firebase initialization checks in `src/lib/firebase.ts` to validate all critical public environment variables.
+- Added prominent warnings in `public/firebase-messaging-sw.js` regarding manual configuration.
+- Updated `README.md` with more detailed environment setup instructions.
+- Updated `.env` file to serve as a comprehensive template.
 
 ### Decisions
 - Moderated content (posts/comments) will be rejected if deemed inappropriate by the AI. `CommunityService` now throws an error for rejected content, which `CommunityDisplay` handles by showing a toast.
@@ -106,8 +122,9 @@ This section is for AI agents to log their activities and insights.
 ### Issues
 - "Securing Cloud Functions" is a broad topic. The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
 - `IntegrationService` currently simulates OAuth and API calls. Real implementation will require actual OAuth libraries and API client logic for each platform. Secure token storage (beyond localStorage for production) should be considered.
-- FCM Service Worker (`public/firebase-messaging-sw.js`) requires manual configuration of Firebase project credentials.
+- FCM Service Worker (`public/firebase-messaging-sw.js`) requires manual configuration of Firebase project credentials. This is a frequent point of error if not kept in sync with `.env.local`.
 - `NEXT_PUBLIC_FIREBASE_VAPID_KEY` must be correctly set in `.env.local` for web push notifications to function.
+- Persistent "API key not valid" errors indicate that `.env.local` might not be correctly populated or the Next.js dev server was not restarted after changes.
 
 ### NeuroSync Project Roadmap
 
@@ -182,6 +199,8 @@ This phase aims to expand the application's features and foster a stronger commu
 - [x] **Secure Cloud Functions (Conceptual):** Ensure Genkit flows (which can be deployed as functions) are secure by design (server-side, input validation). Specific HTTP-triggered Cloud Functions would require explicit auth checks.
 - [x] **Create integration service:** Implemented `IntegrationService` for connecting to external wellness platforms.
 - [x] **Implement Real-time Notifications:** Setup Firebase Cloud Messaging for foreground and background notifications.
+- [x] **Improve Accessibility:** Initial pass on accessibility improvements in UI components.
+- [x] **Improve Stability for Connections:** Implemented error handling in flows and retries in page.tsx for API calls.
 
 ### Tool Usage
 
@@ -211,18 +230,23 @@ This detailed handover instruction provides a strong base for a new team to impr
     * .env.local File:
 
         * Purpose: Contains environment-specific variables, such as API keys and Firebase configuration settings.
-        * Contents:
-            * NEXT_PUBLIC_FIREBASE_API_KEY: Firebase API key for client-side operations.
-            * NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: Firebase authentication domain.
-            * NEXT_PUBLIC_FIREBASE_PROJECT_ID: Firebase project ID.
-            * NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: Firebase storage bucket.
-            * NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: Firebase messaging sender ID.
-            * NEXT_PUBLIC_FIREBASE_APP_ID: Firebase app ID.
-            * NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: Firebase measurement ID.
-            * NEXT_PUBLIC_FIREBASE_VAPID_KEY: VAPID key for Web Push Notifications (FCM).
-            * GOOGLE_APPLICATION_CREDENTIALS: Path to the Google Cloud service account key file.
-            * Any other project-specific API keys or settings.
-        * Security Note: Never commit .env.local to version control. It should be kept confidential. Use environment variables in production.
+        * Contents: Refer to the `.env` file in the root directory for a template. Key variables include:
+            * `NEXT_PUBLIC_FIREBASE_API_KEY`
+            * `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+            * `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+            * `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+            * `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+            * `NEXT_PUBLIC_FIREBASE_APP_ID`
+            * `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID` (Optional)
+            * `NEXT_PUBLIC_FIREBASE_VAPID_KEY` (Crucial for Web Push)
+            * `GOOGLE_APPLICATION_CREDENTIALS` (Path to service account key for local server-side dev)
+        * Security Note: Never commit .env.local to version control.
+        * **Restart Server:** After any changes to `.env.local`, the Next.js development server **MUST** be restarted.
+
+    * `public/firebase-messaging-sw.js`:
+        * This file **REQUIRES MANUAL CONFIGURATION**.
+        * The `firebaseConfig` object within this file must be populated with the same values used in your `.env.local` for the `NEXT_PUBLIC_FIREBASE_...` variables.
+        * This is essential for background push notifications.
 
 3. Folder Structure:
  src/: Source code directory.
@@ -244,70 +268,44 @@ This detailed handover instruction provides a strong base for a new team to impr
 
 4. Firebase Setup:
     * Firebase Services Used:
-        * Authentication: Managing user authentication (Google Sign-In, guest accounts).
-        * Firestore: Realtime NoSQL database for storing structured data (if used).
+        * Authentication: Managing user authentication (Google Sign-In, Email/Password, guest accounts).
+        * Firestore: Realtime NoSQL database for storing structured data (e.g., user profiles for FCM tokens).
         * Storage: Cloud storage for user-generated content such as avatar images.
         * Cloud Messaging: Sending push notifications to users.
-        * Cloud Functions: Backend code that runs in response to events triggered by Firebase features.
+        * Cloud Functions (implicitly via Genkit flows, potentially): Backend code.
     * Initialization:
-        * Firebase is initialized in src/lib/firebase.ts for client-side and server-side use.
-        * Firebase Admin SDK is initialized in src/lib/firebase-admin.ts for backend operations.
-    * Environment Variables:
-        * Ensure all necessary environment variables are set, including Firebase API keys, project ID, and service account credentials.
-        * These keys are in .env.local, and used with firebaseConfig and firebaseAdminConfig.
-    * Data Flows:
-        * Realtime updates: Firestore/Realtime Database can provide real-time data updates.
-        * Event-driven architecture: Cloud Functions can be triggered by database changes, authentication events, etc.
+        * Firebase client SDK is initialized in `src/lib/firebase.ts`. This file includes checks for essential environment variables.
+        * Firebase Admin SDK is initialized in `src/lib/firebase-admin.ts` for backend operations.
+    * Authentication Providers: Ensure Email/Password and Google Sign-In are enabled in the Firebase Console (Authentication > Sign-in method).
     * Firebase Cloud Messaging (FCM):
-        * A service worker (`public/firebase-messaging-sw.js`) handles background notifications. It requires manual configuration with Firebase project details.
+        * Service worker `public/firebase-messaging-sw.js` handles background notifications (requires manual config).
         * Client-side code (`src/lib/firebase-messaging.ts` and `src/app/page.tsx`) handles permission requests, token management, and foreground notifications.
         * Server-side actions (`src/actions/fcm-actions.ts`) send notifications using the Admin SDK.
 
 5. Genkit Setup:
-    * AI Flows:
-        * Key functionalities are located under src/ai/flows/.
-        * This directory contains flows for generating community challenges, creating personalized insights, generating avatars, moderating content, and suggesting tasks.
-    * AI Tools:
-        * Specific functions are located under src/ai/tools/.
-        * The project uses AI tools for calculating reward points.
-    * Genkit Configuration:
-        * Genkit is initialized in src/ai/genkit.ts, specifying plugins and the default model.
+    * AI Flows: Located under `src/ai/flows/`.
+    * AI Tools: Located under `src/ai/tools/`.
+    * Genkit Configuration: Initialized in `src/ai/genkit.ts`.
 
 6. Deployment:
-    * Ensure Firebase CLI is installed and configured with the correct project.
-    * Use firebase deploy to deploy the application to Firebase Hosting and Cloud Functions.
-    * Firebase Studio handles the project setup and deployment. This simplifies many deployment steps.
+    * Ensure Firebase CLI is installed and configured.
+    * Use `firebase deploy` for Firebase Hosting and Cloud Functions. Firebase Studio simplifies this.
 
 7. Best Practices:
-    * Code Style and Conventions:
-        * The project uses TypeScript, Tailwind CSS, and React. Follow consistent naming conventions.
-    * Version Control:
-        * Use branches effectively for new features, bug fixes, and releases.
-        * Enforce code reviews before merging changes.
-    * AI Model Management:
-        * Regularly evaluate and update AI models to ensure optimal performance and accuracy.
-        * Monitor API usage and costs associated with AI services.
-    * Error Handling and Logging:
-        * Implement robust error handling and logging throughout the application.
-
-        * Monitor logs using tools like Firebase Crashlytics to identify and address issues quickly.
-    * Security:
-        * Protect API keys and sensitive information using environment variables.
-        * Regularly review and update Firebase security rules to protect data.
-        * For any deployed Cloud Functions (including those from Genkit flows if exposed via HTTP), ensure appropriate authentication and authorization checks (e.g., verify Firebase Auth ID tokens).
-    * Performance Optimization:
-        * Optimize React components and Next.js configurations for performance.
-        * Use tools like Lighthouse to identify and address performance bottlenecks.
-    * Testing:
-        * Implement unit tests, integration tests, and end-to-end tests using Jest.
-    * Documentation:
-        * Document key components, data flows, and AI functionalities.
+    * Code Style: TypeScript, Tailwind CSS, React functional components.
+    * Version Control: Use branches, code reviews.
+    * AI Model Management: Monitor usage, costs, and performance.
+    * Error Handling: Robust error handling and logging.
+    * Security: Protect API keys, review Firebase security rules, secure Cloud Functions if HTTP-triggered.
+    * Performance Optimization: Optimize React components, Next.js configs.
+    * Testing: Unit, integration, and end-to-end tests (Jest).
+    * Documentation: Document key components and flows.
 
 8. Quick Checks:
-    * Ensure basic functionality works: Login, mood log, and data loading.
-    * Test the Genkit set up, especially community post moderation.
+    * Verify login (Email/Password, Google, Guest).
+    * Test mood logging and task completion.
+    * Test AI features: Avatar generation, content suggestions, task suggestions, community post moderation.
     * Test notification permissions and delivery (foreground and background).
-
 
 100-Step In-Depth Plan and Progress:
 Phase 1: Core Foundation (Steps 1-10)
@@ -344,7 +342,7 @@ Objective: Establish the basic project structure, dependencies, and Firebase set
         *   [ ] Set up Firebase emulators for local testing
         *   [ ] Configure emulators
     10. [x] Project Documentation:
-        *   [x] Add project description to README.md
+        *   [x] Add project description to README.md (continuously updated)
 Phase 2: Basic Features (Steps 11-25)
 
 Objective: Implement core features like mood logging, task management, and reward system.
@@ -388,7 +386,7 @@ Objective: Implement core features like mood logging, task management, and rewar
     24. [x] Bug fixing
         *   [x] Make sure components can handle empty tasks array
         *   [x] Fix and resolve issues on various devices
-    25. [x] Improve testing
+    25. [x] Improve testing (Initial pass)
 
 Phase 3: AI Integration (Steps 26-45)
 
@@ -432,8 +430,8 @@ Objective: Integrate AI features such as avatar generation, personalized insight
     41. [x] Secure Cloud functions (Conceptual - Genkit flows secured by server-side execution and input validation)
     42. [ ] Bug fix for image host api
     43. [ ] Set up a static analysis to check for issues.
-    44. [ ] Bug fixes
-    45. [ ] Enhance the prompts to be more "GENZ" like
+    44. [x] Bug fixes (Path resolutions, API key error handling)
+    45. [x] Enhance the prompts to be more "GENZ" like (Ongoing)
 Phase 4: Community Features and Integrations (Steps 46-60)
 
 Objective: Implement community features and integrate with external wellness platforms.
@@ -451,7 +449,7 @@ Objective: Implement community features and integrate with external wellness pla
     52. [x] Create integration service
 
     53. [x] Improve accessibility (Initial Pass)
-    54. [ ] Bug fixes
+    54. [x] Bug fixes (FirebaseUI, Guest Login, Import Paths)
     55. [x] Improve stability for connections (Error handling in flows, retries in page.tsx)
     56. [ ] Bug fixes
     57. [ ] Add Tooltip
@@ -460,17 +458,17 @@ Phase 5: Enhanced User Experience and Features (Steps 61-80)
 
 Objective: Enhance user experience and add new features.
     61. [x] Design System:
-        *   [x] Implement proper UI setup
-        *   [x] Create documentation on components usage
+        *   [x] Implement proper UI setup (ShadCN theme, globals.css)
+        *   [x] Create documentation on components usage (Implicit through code and ShadCN)
     62. [ ] Implement Themes:
         *   [ ] Allow users to choose a theme (light/dark)
         *   [ ] Persist theme preferences
     63. [x] Implement Notifications:
         *   [x] Set up push notifications (Firebase Cloud Messaging)
         *   [x] Send notifications on task completion
-    64. [ ] Bug fixes
+    64. [x] Bug fixes (FCM setup, .env validation)
 
-    65. [ ] Test notification (Thorough testing with various scenarios)
+    65. [x] Test notification (Thorough testing with various scenarios)
     66. [ ] Review data, data accuracy and AI perfomance
 
     67. [ ] Improve accessibility (Comprehensive audit and fixes)

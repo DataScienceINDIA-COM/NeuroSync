@@ -1,44 +1,12 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { TaskSuggestionsInputSchema, SuggestedTaskDetailSchema, TaskSuggestionsOutputSchema } from '@/ai/schemas';
 
-const TaskSuggestionsInputSchema = z.object({
-  moodLogs: z.array(z.object({
-    date: z.string().describe("Date of the mood log (e.g., YYYY-MM-DD)"),
-    mood: z.string().describe("The mood logged (e.g., Happy, Stressed)"),
-    activities: z.array(z.string()).describe("List of activities for that day"),
-    notes: z.string().optional().describe("Optional notes for the day"),
-  })).min(1).describe('An array of mood logs, requiring at least one entry.'),
-  hormoneLevels: z.object({
-    dopamine: z.number(),
-    adrenaline: z.number(),
-    cortisol: z.number(),
-    serotonin: z.number(),
-  }).describe('The user\'s current estimated hormone levels.'),
-  completedTasks: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string(),
-    rewardPoints: z.number(),
-    isCompleted: z.boolean(),
-    hasNeuroBoost: z.boolean(),
-  })).optional().describe('The user\'s recently completed tasks (optional).'),
-});
 export type TaskSuggestionsInput = z.infer<typeof TaskSuggestionsInputSchema>;
-
-// Define the schema for a single suggested task detail
-const SuggestedTaskDetailSchema = z.object({
-  name: z.string().describe("The name of the suggested task."),
-  description: z.string().describe("A brief description of the task. Keep it GenZ-friendly and encouraging!"),
-  hasNeuroBoost: z.boolean().describe("Whether the task is likely to provide a significant mental/emotional boost (e.g., for VibePoints multiplier)."),
-});
 export type SuggestedTaskDetail = z.infer<typeof SuggestedTaskDetailSchema>;
-
-// The output schema should be an object containing an array of these detailed suggestions
-const TaskSuggestionsOutputSchema = z.object({
-  suggestions: z.array(SuggestedTaskDetailSchema).describe('An array of 2-3 suggested task details (name, description, hasNeuroBoost).'),
-});
 export type TaskSuggestionsOutput = z.infer<typeof TaskSuggestionsOutputSchema>;
 
 // The main exported function that calls the flow
