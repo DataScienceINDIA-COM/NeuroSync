@@ -1,5 +1,5 @@
 
-import type { CommunityPost, Comment, CommunityPostStatus } from "@/types/community";
+import type { CommunityPost, Comment, CommunityPostStatus, ReportDetail } from "@/types/community";
 import { generateId } from "@/lib/utils";
 import { parseISO } from "date-fns";
 import { moderateCommunityPost } from "@/ai/flows/moderate-community-post-flow";
@@ -31,6 +31,7 @@ class CommunityService {
             edited: post.edited ?? false,
             deleted: post.deleted ?? false,
             status: post.status ?? 'approved', // Default to approved for older posts
+            reports: post.reports ?? [], // Initialize reports array
           })).sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
         } catch (error) {
           console.error("Failed to parse community posts from localStorage", error);
@@ -62,6 +63,7 @@ class CommunityService {
         edited: false,
         deleted: false,
         status: 'approved',
+        reports: [],
       },
       {
         id: generateId(),
@@ -80,6 +82,7 @@ class CommunityService {
         edited: false,
         deleted: false,
         status: 'approved',
+        reports: [],
       },
       {
         id: generateId(),
@@ -97,6 +100,7 @@ class CommunityService {
         edited: false,
         deleted: false,
         status: 'approved',
+        reports: [],
       }
     ].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
   }
@@ -113,7 +117,7 @@ class CommunityService {
     return [...visiblePosts].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
   }
 
-  public async createPost(postData: Omit<CommunityPost, 'likes' | 'comments' | 'shares' | 'likedBy' | 'commentCount' | 'shareCount' | 'edited' | 'deleted' | 'status' | 'moderationReason'>): Promise<CommunityPost> {
+  public async createPost(postData: Omit<CommunityPost, 'likes' | 'comments' | 'shares' | 'likedBy' | 'commentCount' | 'shareCount' | 'edited' | 'deleted' | 'status' | 'moderationReason' | 'reports'>): Promise<CommunityPost> {
     const moderationResult = await moderateCommunityPost({ postContent: postData.message });
 
     let postStatus: CommunityPostStatus = 'approved';
@@ -122,12 +126,7 @@ class CommunityService {
     if (!moderationResult.isAppropriate) {
       postStatus = 'rejected';
       moderationReason = moderationResult.reason || "Content deemed inappropriate by AI moderator.";
-      // Optionally, you could throw an error here to prevent saving rejected posts
-      // or handle it by not adding to the main list / adding to a separate list for review.
-      // For this implementation, we'll mark it as rejected and include the reason.
-      // If the app should prevent saving rejected posts, throw an error here.
       console.warn(`Post by ${postData.userName} rejected: ${moderationReason}`);
-      // Throwing an error if you want to prevent rejected posts from being added at all
       throw new Error(`Post rejected: ${moderationReason}`);
     }
     
@@ -143,6 +142,7 @@ class CommunityService {
       deleted: false,
       status: postStatus,
       moderationReason: moderationReason,
+      reports: [],
     };
 
     this.posts.unshift(newPost); 
@@ -163,14 +163,13 @@ class CommunityService {
         this.posts[postIndex].status = 'rejected';
         this.posts[postIndex].moderationReason = moderationResult.reason || "Edited content deemed inappropriate.";
         this.savePosts();
-        // Depending on UX, you might throw an error or just update status.
         throw new Error(`Update rejected: ${this.posts[postIndex].moderationReason}`);
       }
 
       this.posts[postIndex].message = updatedMessage;
       this.posts[postIndex].timestamp = new Date().toISOString(); 
       this.posts[postIndex].edited = true;
-      this.posts[postIndex].status = 'approved'; // Re-approve after edit if moderation passes
+      this.posts[postIndex].status = 'approved'; 
       this.posts[postIndex].moderationReason = undefined;
       this.savePosts();
       return this.posts[postIndex];
@@ -190,7 +189,7 @@ class CommunityService {
 
   public async likePost(postId: string, userId: string): Promise<CommunityPost | null> {
     const post = this.getPostById(postId);
-    if (post && post.status === 'approved') { // Only allow liking approved posts
+    if (post && post.status === 'approved') { 
       const alreadyLiked = post.likedBy.includes(userId);
       if (alreadyLiked) {
         post.likes = Math.max(0, post.likes - 1);
@@ -207,13 +206,9 @@ class CommunityService {
 
   public async addCommentToPost(postId: string, commentData: Omit<Comment, 'id'>): Promise<CommunityPost | null> {
     const post = this.getPostById(postId);
-    if (post && post.status === 'approved') { // Only allow commenting on approved posts
+    if (post && post.status === 'approved') { 
       const moderationResult = await moderateCommunityPost({ postContent: commentData.comment });
       if (!moderationResult.isAppropriate) {
-         // Decide how to handle inappropriate comments:
-         // 1. Don't add it and throw an error/return null.
-         // 2. Add it with a 'rejected' status (if Comment type supports it).
-         // For simplicity, we'll prevent adding it.
         console.warn(`Comment by ${commentData.userName} on post ${postId} rejected: ${moderationResult.reason}`);
         throw new Error(`Comment rejected: ${moderationResult.reason || "Comment deemed inappropriate."}`);
       }
@@ -232,12 +227,35 @@ class CommunityService {
 
   public async sharePost(id: string): Promise<CommunityPost | null> {
     const post = this.getPostById(id);
-    if (post && post.status === 'approved') { // Only allow sharing approved posts
+    if (post && post.status === 'approved') { 
         post.shares = (post.shares ?? 0) + 1;
         post.shareCount = post.shares; 
         this.savePosts();
         console.log(`Simulated share for post: ${post.message}`);
         return post;
+    }
+    return null;
+  }
+
+  public async reportPost(postId: string, reportDetails: Omit<ReportDetail, 'reportId' | 'timestamp'>): Promise<CommunityPost | null> {
+    const post = this.getPostById(postId);
+    if (post) {
+      const newReport: ReportDetail = {
+        ...reportDetails,
+        reportId: generateId(),
+        timestamp: new Date().toISOString(),
+      };
+      if (!post.reports) {
+        post.reports = [];
+      }
+      post.reports.push(newReport);
+      // Optional: Change post status to 'pending_moderation' if it receives a certain number of reports
+      // if (post.reports.length >= 3 && post.status === 'approved') {
+      //   post.status = 'pending_moderation';
+      //   post.moderationReason = (post.moderationReason ? post.moderationReason + "; " : "") + "Post under review due to multiple reports.";
+      // }
+      this.savePosts();
+      return post;
     }
     return null;
   }
