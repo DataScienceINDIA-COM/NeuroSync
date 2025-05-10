@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -29,7 +30,7 @@ import type { User as AppUser } from "@/types/user";
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle } from "lucide-react";
+import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle, ChevronDown } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow"; 
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
@@ -40,6 +41,12 @@ import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
 import { signOutUser } from '@/services/authService'; 
 import FirebaseUIWidget from '@/components/auth/FirebaseUIWidget';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 
 const LOCAL_STORAGE_KEY_TASKS_PREFIX = "vibeCheckTasks_";
@@ -375,64 +382,62 @@ function MainAppInterface() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
 
            <section className="lg:col-span-1 space-y-6">
-           <Card className="shadow-lg border-primary/50 rounded-xl">
-              <CardHeader className="p-5">
+           <Card className="shadow-lg border-primary/50 rounded-xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-br from-primary/80 to-accent/80 p-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <UserIcon className="h-7 w-7 text-primary" />
-                    <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
+                    <UserIcon className="h-7 w-7 text-primary-foreground drop-shadow-md" />
+                    <CardTitle className="text-2xl font-bold tracking-tight text-primary-foreground drop-shadow-md">
                       My Vibe
                     </CardTitle>
                   </div>
                   {!isEditingProfile && (
-                    <Button variant="ghost" size="icon" onClick={handleEditProfile} className="text-muted-foreground hover:text-primary rounded-full">
+                    <Button variant="ghost" size="icon" onClick={handleEditProfile} className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/20 rounded-full">
                         <Edit3 className="h-5 w-5" />
                     </Button>
                   )}
                 </div>
-                <CardDescription className="text-sm text-muted-foreground pt-1">
+                <CardDescription className="text-sm text-primary-foreground/90 pt-1 italic">
                   Track your journey and glow up, bestie! ✨
                 </CardDescription> 
               </CardHeader>
-              <CardContent className="flex flex-col items-center space-y-3 ">
+              <CardContent className="p-5 flex flex-col items-center space-y-4 bg-background">
                 <AvatarDisplay 
                   avatar={appUser?.avatar || null} 
                   size={100} 
                 />
                 {isEditingProfile && appUser ? (
-                  <div className="w-full space-y-2">
+                  <div className="w-full space-y-3">
                     <Input
                       type="text"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       placeholder="Your cool name"
-                      className="text-center text-lg"
+                      className="text-center text-lg font-semibold border-primary/50 focus:ring-primary"
                     />
                     <div className="flex gap-2 justify-center">
-                      <Button onClick={handleSaveProfile} size="sm">
+                      <Button onClick={handleSaveProfile} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md">
                         <Save className="mr-1 h-4 w-4" /> Save
                       </Button>
-                      <Button onClick={handleCancelEdit} variant="outline" size="sm">
+                      <Button onClick={handleCancelEdit} variant="outline" size="sm" className="border-primary/50 text-primary hover:bg-primary/10">
                         <XCircle className="mr-1 h-4 w-4" /> Cancel
                       </Button>
                     </div>
                   </div>
                 ) : (
-                  <h2 className="text-2xl font-bold tracking-tight text-center">{appUser?.name || "Vibe User"}</h2>
+                  <h2 className="text-2xl font-bold tracking-tight text-center text-foreground">{appUser?.name || "Vibe User"}</h2>
                 )}
-                <p className="text-sm text-muted-foreground">Streak: {appUser?.streak || 0} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
-                <p className="text-3xl font-extrabold text-primary drop-shadow-md">VibePoints: {neuroPoints} VP</p>
-                <div className="w-full text-center">
-                  <div className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "justify-center w-full text-sm")}>
-                   <LayoutDashboard className="mr-2 h-4 w-4" />
-                   <span className="text-xs">Tap to expand</span>
-                  </div>
-                 {nudge && <p className="text-sm text-center p-3 bg-primary/10 rounded-lg text-primary shadow-sm">{nudge}</p>}
+                <div className="text-center">
+                    <p className="text-sm text-muted-foreground">Streak: <span className="font-bold text-amber-500">{appUser?.streak || 0} days</span> <Zap className="inline h-4 w-4 text-amber-400 fill-amber-400" /></p>
+                    <p className="text-3xl font-extrabold text-primary drop-shadow-md mt-1">VibePoints: {neuroPoints} VP</p>
+                </div>
+                <div className="w-full text-center p-3 bg-primary/10 rounded-lg text-primary shadow-sm">
+                 {nudge || "Keep vibin' and thrivin'!"}
                 </div>
               </CardContent>
-              <CardContent className="flex justify-center">
-                {authUser && appUser?.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
-              </CardContent>
+              <CardFooter className="p-5 bg-background border-t border-border/30 flex justify-center">
+                {authUser && appUser?.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
+              </CardFooter>
             </Card>
 
             <Card className="shadow-lg">
@@ -489,18 +494,36 @@ function MainAppInterface() {
             </Card>
 
             {appUser && (
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary"><Brain className="h-5 w-5 text-primary"/>Brain Juice Levels</CardTitle>
-                  <CardDescription className="text-muted-foreground">Peep what your brain's cookin' up, bestie.</CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                  <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
-                  <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
-                  <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500"><path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span></div>
-                  <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span></div>
-                </CardContent>
-              </Card>
+              <Accordion type="single" collapsible className="w-full shadow-lg rounded-xl border border-primary/30">
+                <AccordionItem value="item-1">
+                  <Card className="border-none rounded-xl">
+                    <AccordionTrigger className="w-full p-0">
+                      <CardHeader className="flex flex-row items-center justify-between w-full pb-2 hover:bg-primary/5 rounded-t-xl">
+                        <div className="flex items-center gap-2">
+                          <Brain className="h-6 w-6 text-primary" />
+                          <CardTitle className="drop-shadow-sm font-extrabold text-xl text-primary">Brain Juice Levels</CardTitle>
+                        </div>
+                        <ChevronDown className="h-5 w-5 text-primary transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                      </CardHeader>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-4">
+                        <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
+                        <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
+                        <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500"><path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span></div>
+                        <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span></div>
+                      </CardContent>
+                       <CardContent className="pt-2 text-sm text-muted-foreground">
+                        <p>These levels are estimated based on your logged moods and activities. Click to learn more about how each hormone impacts your vibe!</p>
+                        {/* TODO: Add more detailed explanation or link to a modal/page */}
+                      </CardContent>
+                      <CardDescription className="px-6 pb-4 text-xs text-muted-foreground/70">
+                        Peep what your brain's cookin' up, bestie. Levels adjust based on your mood logs & tasks.
+                      </CardDescription>
+                    </AccordionContent>
+                  </Card>
+                </AccordionItem>
+              </Accordion>
             )}
 
             <Card className="shadow-lg">
@@ -675,5 +698,7 @@ function AppPageLogic() {
     </div>
   );
 }
+
+    
 
     
