@@ -72,14 +72,17 @@ This section is for AI agents to log their activities and insights.
 - Affirmed that the security model for Genkit flows, being server-side and invoked via Next.js Server Actions with Zod validation, adequately addresses the "Secure Cloud Functions" requirement at a conceptual level for the current architecture.
 - Implemented AI validation for avatar descriptions in `generateAvatarFlow`. This ensures descriptions are appropriate and clear before image generation.
 - Set up agent profiles in `src/config/agentProfiles.ts` for `AICoach` and `CommunityModerator`.
+- Implemented `IntegrationService` in `src/services/integrationService.ts` to manage connections with external wellness platforms. This service currently uses localStorage for persistence and simulates OAuth flows.
 
 ### Decisions
 - Moderated content (posts/comments) will be rejected if deemed inappropriate by the AI. `CommunityService` now throws an error for rejected content, which `CommunityDisplay` handles by showing a toast.
 - `CommunityPost` type updated with `status` and `moderationReason`.
 - Avatar descriptions will be validated by `validateAvatarDescriptionPrompt` before generation. If invalid, an error with feedback is thrown.
+- `IntegrationService` will store integration details (tokens, status) in localStorage, scoped by `userId`.
 
 ### Issues
 - "Securing Cloud Functions" is a broad topic. The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
+- `IntegrationService` currently simulates OAuth and API calls. Real implementation will require actual OAuth libraries and API client logic for each platform. Secure token storage (beyond localStorage for production) should be considered.
 
 ### NeuroSync Project Roadmap
 
