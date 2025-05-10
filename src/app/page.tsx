@@ -15,7 +15,7 @@ import {
   CardDescription,
   CardFooter,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input"; // Added Input import
+import { Input } from "@/components/ui/input"; 
 import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
 import TaskService from "@/components/task/TaskService";
@@ -375,17 +375,22 @@ function MainAppInterface() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
 
            <section className="lg:col-span-1 space-y-6">
-            <Card className="shadow-md border-accent">
-              <CardHeader className="flex flex-col gap-2">
-                <div className="flex flex-row items-center justify-between">
-                  <CardTitle className="drop-shadow-sm font-extrabold text-2xl text-primary">My Vibe</CardTitle>
+           <Card className="shadow-lg border-primary/50 rounded-xl">
+              <CardHeader className="p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <UserIcon className="h-7 w-7 text-primary" />
+                    <CardTitle className="text-2xl font-bold tracking-tight text-foreground">
+                      My Vibe
+                    </CardTitle>
+                  </div>
                   {!isEditingProfile && (
-                    <Button variant="ghost" size="icon" onClick={handleEditProfile} className="mr-1">
-                        <Edit3 className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={handleEditProfile} className="text-muted-foreground hover:text-primary rounded-full">
+                        <Edit3 className="h-5 w-5" />
                     </Button>
                   )}
                 </div>
-                <CardDescription className="text-muted-foreground">
+                <CardDescription className="text-sm text-muted-foreground pt-1">
                   Track your journey and glow up, bestie! ✨
                 </CardDescription> 
               </CardHeader>
