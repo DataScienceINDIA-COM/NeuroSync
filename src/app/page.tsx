@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -64,9 +63,10 @@ function MainAppInterface() {
   const [editingName, setEditingName] = useState<string>("");
 
   const taskService = useMemo(() => {
-    if (!appUser || !isClient) return null; 
-    return new TaskService(appUser); // Pass appUser to TaskService constructor
-  }, [appUser, isClient]);
+    if (!isClient) return null; 
+    // TaskService is now stateless, no need to pass appUser to constructor
+    return new TaskService(); 
+  }, [isClient]);
 
 
   useEffect(() => {
@@ -127,9 +127,12 @@ function MainAppInterface() {
   useEffect(() => {
     const fetchTaskSuggestions = async () => {
      if (isClient && appUser && appUser.moodLogs && appUser.tasks.length <= 5 && !appUser.id.startsWith('guest_') && taskService) {
-       const suggestedTaskDetailsOutput = await taskService.getSuggestedTasks(appUser.moodLogs, appUser.hormoneLevels, appUser.tasks.filter(t => t.isCompleted));
+       // Ensure completedTasks is an array even if undefined initially
+       const completedTasksForAI = appUser.tasks?.filter(t => t.isCompleted) || [];
+       const suggestedTaskDetailsOutput = await taskService.getSuggestedTasks(appUser.moodLogs, appUser.hormoneLevels, completedTasksForAI);
+       
        if (suggestedTaskDetailsOutput && suggestedTaskDetailsOutput.suggestions) {
-         const newTasksPromises = suggestedTaskDetailsOutput.suggestions.map(async (taskDetail) => {
+         const newTasksPromises = suggestedTaskDetailsOutput.suggestions.map(async (taskDetail) => { // taskDetail is now { name, description, hasNeuroBoost }
             const points = await taskService.calculateRewardPointsForTask(taskDetail.description, appUser.moodLogs?.[0]?.mood || 'Neutral', appUser.hormoneLevels);
             return taskService.createTaskObject({ 
               name: taskDetail.name,
@@ -154,7 +157,7 @@ function MainAppInterface() {
       fetchTaskSuggestions();
    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, taskService, appUser?.id, appUser?.moodLogs?.length, appUser?.tasks?.length]);
+  }, [isClient, taskService, appUser?.id, appUser?.moodLogs?.length]); // appUser.tasks.length removed to prevent loop if tasks are added
 
 
   const handleFirebaseSignOutInternal = async () => {
@@ -182,10 +185,10 @@ function MainAppInterface() {
       let newLastCompletedDay = appUser.lastCompletedDay;
 
       if (appUser.lastCompletedDay !== currentDayOfYear) {
-        if (appUser.lastCompletedDay === currentDayOfYear -1 || (currentDayOfYear === 0 && appUser.lastCompletedDay === 365) ) {
+        if (appUser.lastCompletedDay === currentDayOfYear -1 || (currentDayOfYear === 0 && appUser.lastCompletedDay === 365) ) { // Check for consecutive day or year wrap-around
           newStreak +=1;
         } else {
-          newStreak = 1; 
+          newStreak = 1; // Reset streak if not consecutive
         }
         newLastCompletedDay = currentDayOfYear;
       } 
@@ -205,7 +208,7 @@ function MainAppInterface() {
         sendNotificationToUser(authUser.uid, { 
           title: "Quest Smashed! 🚀",
           body: `You just crushed '${completedTask.name}'! Keep that W energy!`,
-          data: { taskId: completedTask.id, url: `/tasks/${completedTask.id}` } 
+          data: { taskId: completedTask.id, url: `/tasks/${completedTask.id}` } // Example deep link
         }).then(response => {
           if (response.success) console.log("Task completion notification sent!");
           else console.error("Failed to send task completion notification:", response.message);
@@ -643,4 +646,3 @@ function AppPageLogic() {
     </div>
   );
 }
-
