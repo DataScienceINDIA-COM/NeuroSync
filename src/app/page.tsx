@@ -163,15 +163,14 @@ function MainAppInterface() {
     if (isClient && tasks.length === 0 && taskService && appUser) {
       console.log("MainAppInterface: Initializing default tasks for user:", appUser.id);
       const initializeTasks = async () => {
-        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted'>[] = [
-          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true },
-          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false },
+        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted' | 'rewardPoints'>[] = [
+          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", hasNeuroBoost: true },
+          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", hasNeuroBoost: false },
         ];
         
         const newTasksPromises = defaultTaskData.map(async (taskData) => {
           if(!taskService || !appUser) return null; 
-          // Ensure rewardPoints are calculated if not provided
-          const points = taskData.rewardPoints ?? await taskService.calculateRewardPointsForTask(taskData.description, appUser.moodLogs?.[0]?.mood || 'Neutral', appUser.hormoneLevels);
+          const points = await taskService.calculateRewardPointsForTask(taskData.description, appUser.moodLogs?.[0]?.mood || 'Neutral', appUser.hormoneLevels);
           return taskService.createTask({...taskData, rewardPoints: points});
         });
         const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
@@ -499,8 +498,8 @@ function MainAppInterface() {
               <Accordion type="single" collapsible className="w-full shadow-lg rounded-xl border border-primary/30">
                 <AccordionItem value="item-1">
                   <Card className="border-none rounded-xl">
-                    <AccordionTrigger className="w-full p-0">
-                      <CardHeader className="flex flex-row items-center justify-between w-full pb-2 hover:bg-primary/5 rounded-t-xl">
+                    <AccordionTrigger className="w-full p-0 hover:no-underline">
+                      <CardHeader className="flex flex-row items-center justify-between w-full pb-2 hover:bg-primary/5 rounded-t-xl group">
                         <div className="flex items-center gap-2">
                           <Brain className="h-6 w-6 text-primary" />
                           <CardTitle className="drop-shadow-sm font-extrabold text-xl text-primary">Brain Juice Levels</CardTitle>
@@ -512,8 +511,18 @@ function MainAppInterface() {
                       <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-4">
                         <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
                         <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
-                        <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500"><path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span></div>
-                        <div><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/></svg>Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span></div>
+                        <div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500">
+                                <path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/>
+                            </svg>
+                            Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span>
+                        </div>
+                        <div>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500">
+                                <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/>
+                            </svg>
+                            Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span>
+                        </div>
                       </CardContent>
                        <CardContent className="pt-2 text-sm text-muted-foreground">
                         <p>These levels are estimated based on your logged moods and activities. Click to learn more about how each hormone impacts your vibe!</p>
@@ -699,7 +708,5 @@ function AppPageLogic() {
     </div>
   );
 }
-
-    
 
     
