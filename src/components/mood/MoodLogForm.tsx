@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+// Removed MoodLogsProvider, useMoodLogs from here, as it should be provided higher up
+// and MoodLogForm should consume it via useMoodLogs directly or get addMoodLog via props
 
 const moodLogSchema = z.object({
   date: z.date({
@@ -46,19 +48,9 @@ const moodEmojiMap: Record<Mood, string> = {
 
 type MoodLogFormValues = z.infer<typeof moodLogSchema>;
 
-// const moodIcons: Record<Mood, React.ElementType> = {
-//   Happy: Smile,
-//   Sad: Frown,
-//   Neutral: Meh,
-//   Anxious: AlertCircle,
-//   Calm: Leaf,
-//   Energetic: Zap,
-//   Stressed: CloudLightning,
-//   Tired: Battery,
-// };
 
 interface MoodLogFormProps {
-  onLogMood: (log: MoodLog) => void;
+  onLogMood: (logData: Omit<MoodLog, 'id'>) => void;
   existingDates: string[];
 }
 
@@ -83,9 +75,9 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
     Neutral: "bg-gray-400 hover:bg-gray-500", 
     Anxious: "bg-orange-500 hover:bg-orange-600", 
     Calm: "bg-green-400 hover:bg-green-500", 
-    Energetic: "bg-purple-400 hover:bg-purple-500", // Changed to purple for more pop
+    Energetic: "bg-purple-400 hover:bg-purple-500", 
     Stressed: "bg-red-500 hover:bg-red-600", 
-    Tired: "bg-indigo-400 hover:bg-indigo-500", // Changed to indigo
+    Tired: "bg-indigo-400 hover:bg-indigo-500", 
   };
 
   const [selectedMood, setSelectedMood] = useState<Mood | null>(null);
@@ -106,20 +98,19 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
       return;
     }
 
-    const newLog: MoodLog = {
-      id: crypto.randomUUID(),
+    const newLogData: Omit<MoodLog, 'id'> = { 
       date: formattedDate,
       mood: data.mood as Mood,
       activities: data.activities.split(",").map((activity) => activity.trim()).filter(activity => activity.length > 0),
       notes: data.notes,
     };
-    onLogMood(newLog);
+    onLogMood(newLogData); 
     toast({
       title: "Vibe Secured! ✨💅", 
       description: `Your mood for ${format(data.date, "PPP")} is locked in. Period. 🔒`, 
     });
     form.reset({ date: new Date(), mood: "", activities: "", notes: "" });
-    setSelectedMood(null); // Reset selected mood UI
+    setSelectedMood(null);
   }
 
   return (
@@ -128,8 +119,6 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
         <FormField
           control={form.control}
           name="date"
-          
-          
           render={({ field }) => (
             <FormItem className="flex flex-col">
               <FormLabel className="font-semibold text-primary">Date Check 🗓️</FormLabel>
@@ -269,3 +258,4 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
     </Form>
   );
 }
+

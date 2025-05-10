@@ -6,13 +6,13 @@ import type { CommunityPost } from "@/types/community";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import CommunityService from "@/components/community/CommunityService";
+import CommunityService from "@/components/community/CommunityService"; 
 import { generateId } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Send, Users, MessageSquarePlus, Sparkles, Trophy, Loader2, Lightbulb } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { useUser } from "@/contexts/UserContext";
-import { useMoodLogs } from "@/contexts/MoodLogsContext";;
+import { useMoodLogs } from "@/contexts/MoodLogsContext";
 import { generateCommunityChallenges, type Challenge, type GenerateCommunityChallengesOutput } from "@/ai/flows/community-challenges-flow";
 import { useToast } from "@/hooks/use-toast";
 
@@ -97,19 +97,19 @@ export function CommunityDisplay() {
     if (newPostContent.trim() && communityService && user) {
       const newPostData: CommunityPost = {
           id: generateId(),
-          likes: 0,
-          comments: [],
-          shares: 0,
-          likedBy: [],
-          commentCount: 0,
-          shareCount: 0,
-          edited: false,
-          deleted: false,
           userId: user.id,
         userName: user.name || "Vibe Explorer", 
         userAvatar: user.avatar?.imageUrl,
         message: newPostContent,
         timestamp: new Date().toISOString(),
+        likes: 0,
+        comments: [],
+        shares: 0,
+        likedBy: [],
+        commentCount: 0,
+        shareCount: 0,
+        edited: false,
+        deleted: false,
       };
       communityService.createPost(newPostData);
       setPosts((prevPosts) => [newPostData, ...prevPosts].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()));
@@ -122,8 +122,10 @@ export function CommunityDisplay() {
   const handleLikePost = async (postId: string) => {
     try {
         if (!user || !communityService) return;
-        const updatedPosts = await communityService.likePost(postId, user.id);
-        setPosts(updatedPosts);
+        const updatedPost = await communityService.likePost(postId, user.id);
+        if (updatedPost) {
+            setPosts(prevPosts => prevPosts.map(p => p.id === postId ? updatedPost : p).sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()));
+        }
     } catch (error) {
         console.error("Error liking post:", error);
          toast({
@@ -138,7 +140,7 @@ const handleCommentPost = async (postId: string, commentText: string) => {
     try {
         if (!user || !communityService || !commentText) return;
 
-        const updatedPosts = await communityService.commentPost(postId, {
+        const updatedPost = await communityService.addCommentToPost(postId, {
             id: generateId(),
             userId: user.id,
             userName: user.name || "Vibe Explorer",
@@ -146,7 +148,9 @@ const handleCommentPost = async (postId: string, commentText: string) => {
             comment: commentText,
             timestamp: new Date().toISOString(),
         });
-        setPosts(updatedPosts);
+        if (updatedPost) {
+            setPosts(prevPosts => prevPosts.map(p => p.id === postId ? updatedPost : p).sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()));
+        }
     } catch (error) {
         console.error("Error commenting on post:", error);
          toast({
@@ -160,10 +164,18 @@ const handleCommentPost = async (postId: string, commentText: string) => {
 
 const handleDeletePost = async (postId: string) => {
     try {
-        await communityService?.deletePost(postId);
-        setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+        if (!user || !communityService) return;
+        const postToDelete = posts.find(p => p.id === postId);
+        if (postToDelete?.userId !== user.id) {
+            toast({ title: "Not Your Post!", description: "You can only delete your own vibes, fam.", variant: "destructive"});
+            return;
+        }
+        await communityService.deletePost(postId);
+        setPosts(prevPosts => prevPosts.filter(post => post.id !== postId).sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime()));
+        toast({ title: "Vibe Deleted!", description: "That post is history now."});
     } catch (error) {
         console.error("Error deleting post:", error);
+        toast({ title: "Deletion Failed", description: "Couldn't delete the post. Try again?", variant: "destructive"});
     }
 };
   
@@ -261,8 +273,10 @@ const handleDeletePost = async (postId: string) => {
               placeholder="What's on your mind, fam? Spill the tea... 🍵" 
               className="w-full min-h-[120px] bg-background/70 focus:bg-background rounded-lg shadow-inner"
               required
+              disabled={!user || user.id.startsWith('guest_')}
             />
-            <Button type="submit" className="w-full sm:w-auto" disabled={!newPostContent.trim()}>
+             {user && user.id.startsWith('guest_') && <p className="text-xs text-muted-foreground">Sign in to post in the Squad Zone!</p>}
+            <Button type="submit" className="w-full sm:w-auto" disabled={!newPostContent.trim() || !user || user.id.startsWith('guest_')}>
               <Send className="mr-2 h-4 w-4" /> Post It, Period.💅 
             </Button>
           </form>
@@ -303,41 +317,39 @@ const handleDeletePost = async (postId: string) => {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => handleLikePost(post.id)}
+                                        onClick={() => user && !user.id.startsWith('guest_') ? handleLikePost(post.id) : toast({title: "Guests Can't Like!", description:"Sign in to spread the love!", variant: "destructive"})}
+                                        disabled={!user || user.id.startsWith('guest_')}
                                     >
-                                        Like {post.likedBy?.length > 0 ? `(${post.likedBy.length})` : ""}
+                                        Like {post.likes > 0 ? `(${post.likes})` : ""}
                                     </Button>
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => {
+                                            if (!user || user.id.startsWith('guest_')) {
+                                                toast({title: "Guests Can't Comment!", description:"Sign in to join the convo!", variant: "destructive"});
+                                                return;
+                                            }
                                             const commentText = prompt("Enter your comment:");
                                             if (commentText !== null && commentText.trim() !== "") {
                                                 handleCommentPost(post.id, commentText.trim());
                                             }
                                         }}
+                                        disabled={!user || user.id.startsWith('guest_')}
                                     >
                                         Comment {post.comments?.length > 0 ? `(${post.comments.length})` : ""}
                                     </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {}}
-                                    >
-                                        Share {post.shareCount > 0 ? `(${post.shareCount})` : ""}
-                                    </Button>
+                                   
                                     {user?.id === post.userId && (
                                         <>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 onClick={() => {
-                                                    // Handle edit post logic here
-                                                    // For example, you might open a modal to edit the post
                                                      toast({
-                                                        title: "Not Implemented!",
-                                                        description: "The edit function is still in development",
-                                                        variant: "warning",
+                                                        title: "Coming Soon™️",
+                                                        description: "Editing posts is on the roadmap, bestie!",
+                                                        variant: "default",
                                                         });
                                                 }}
                                             >
@@ -365,3 +377,4 @@ const handleDeletePost = async (postId: string) => {
 }
 
 export default CommunityDisplay;
+

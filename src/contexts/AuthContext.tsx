@@ -9,6 +9,8 @@ import type { User as AppUser } from '@/types/user';
 import { useUser as useAppUser } from '@/contexts/UserContext'; 
 import { generateId } from '@/lib/utils';
 import { getRandomHormone } from '@/ai/hormone-prediction';
+import type { Task } from '@/types/task';
+import type { Reward } from '@/types/reward';
 
 interface AuthContextType {
   authUser: FirebaseUser | null; 
@@ -19,6 +21,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const USER_LOCAL_STORAGE_KEY_PREFIX = "vibeCheckUser_";
 
+// Default initial tasks for a new user
+const getDefaultTasks = (): Task[] => [
+  { id: generateId(), name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", rewardPoints: 10, hasNeuroBoost: true, isCompleted: false },
+  { id: generateId(), name: "30 min Move Sesh", description: "Get that body movin'. No cap.", rewardPoints: 20, hasNeuroBoost: false, isCompleted: false },
+  { id: generateId(), name: "Read for 20", description: "Expand the mind grapes. Big brain energy.", rewardPoints: 15, hasNeuroBoost: false, isCompleted: false },
+];
+
+// Default initial rewards for a new user
+const getDefaultRewards = (isGuest: boolean): Reward[] => isGuest ? 
+  [{ id: generateId(), name: "Quick Vibe Boost (Guest)", description: "A little something for our guest!", pointsRequired: 20, isUnlocked: false, type: "virtual" }]
+  : [
+  { id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
+  { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" },
+];
+
 
 export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [authUser, setAuthUser] = useState<FirebaseUser | null>(null); 
@@ -28,43 +45,48 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
   const createNewAppUser = (firebaseUser: FirebaseUser | null, isGuest = false): AppUser => {
     const userId = isGuest ? 'guest_' + generateId() : firebaseUser?.uid || generateId(); 
     const userName = isGuest ? "Vibe Explorer" : firebaseUser?.displayName || "Vibe User"; 
-    const avatarUrl = isGuest || !firebaseUser?.photoURL 
-        ? `https://picsum.photos/seed/${userId}/100/100` 
-        : firebaseUser.photoURL;
     
-    let imagePath: string | undefined = undefined;
-    if (avatarUrl && avatarUrl.includes('firebasestorage.googleapis.com')) {
-        try {
-            const url = new URL(avatarUrl);
-            const pathName = url.pathname;
-            if (pathName.includes('/o/')) {
-                const objectPathEncoded = pathName.substring(pathName.indexOf('/o/') + 3);
-                imagePath = decodeURIComponent(objectPathEncoded);
+    // Avatar setup
+    const defaultAvatarSeed = userId;
+    let avatarImageUrl = `https://picsum.photos/seed/${defaultAvatarSeed}/100/100`;
+    let avatarImagePath: string | undefined = undefined;
+
+    if (!isGuest && firebaseUser?.photoURL) {
+        avatarImageUrl = firebaseUser.photoURL;
+        if (avatarImageUrl.includes('firebasestorage.googleapis.com')) {
+            try {
+                const url = new URL(avatarImageUrl);
+                const pathName = url.pathname;
+                if (pathName.includes('/o/')) {
+                    const objectPathEncoded = pathName.substring(pathName.indexOf('/o/') + 3);
+                    avatarImagePath = decodeURIComponent(objectPathEncoded);
+                }
+            } catch (e) {
+                console.warn("AuthContext: Could not parse imagePath from firebaseUser.photoURL", e);
             }
-        } catch (e) {
-            console.warn("AuthContext: Could not parse imagePath from avatar imageUrl", e);
         }
     }
     
     const newProfile: AppUser = {
       id: userId,
       name: userName,
-      completedTasks: [],
-      claimedRewards: [],
-      inProgressTasks: [],
       hormoneLevels: getRandomHormone(),
       avatar: {
         id: generateId(),
         name: "Avatar",
         description: "User's Avatar",
-        imageUrl: avatarUrl,
-        imagePath: imagePath, 
+        imageUrl: avatarImageUrl,
+        imagePath: avatarImagePath, 
       },
       streak: 0,
+      lastCompletedDay: null,
       moodLogs: [], 
+      tasks: getDefaultTasks(),
+      rewards: getDefaultRewards(isGuest),
+      neuroPoints: 0,
       fcmToken: undefined, 
     };
-    console.log(`AuthContext: Created new AppUser (${isGuest ? 'Guest' : 'Authenticated'}):`, newProfile);
+    console.log(`AuthContext: Created new AppUser (${isGuest ? 'Guest' : 'Authenticated'}):`, newProfile.id);
     return newProfile;
   };
 
@@ -75,86 +97,75 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       setAuthUser(currentFirebaseUser); 
       let appUserToSet: AppUser | null = null;
       
-      if (currentFirebaseUser) {
-        // Authenticated user
-        const userKey = `${USER_LOCAL_STORAGE_KEY_PREFIX}${currentFirebaseUser.uid}`;
-        console.log(`AuthContext: Authenticated user found. LocalStorage key: ${userKey}`);
-        const storedAppUserString = localStorage.getItem(userKey);
+      const userKey = currentFirebaseUser 
+        ? `${USER_LOCAL_STORAGE_KEY_PREFIX}${currentFirebaseUser.uid}` 
+        : `${USER_LOCAL_STORAGE_KEY_PREFIX}guest`;
+      
+      console.log(`AuthContext: Determined userKey: ${userKey}`);
+      const storedAppUserString = localStorage.getItem(userKey);
 
-        if (storedAppUserString) {
-          try {
-            const parsedUser = JSON.parse(storedAppUserString) as AppUser;
-            if (parsedUser && parsedUser.id === currentFirebaseUser.uid) {
-              console.log("AuthContext: Found matching AppUser in localStorage:", parsedUser);
-              // Ensure avatar imagePath is correctly set if imageUrl is from Firebase Storage
-              if (parsedUser.avatar && parsedUser.avatar.imageUrl && parsedUser.avatar.imageUrl.includes('firebasestorage.googleapis.com') && !parsedUser.avatar.imagePath) {
-                try {
-                  const url = new URL(parsedUser.avatar.imageUrl);
-                  const pathName = url.pathname;
-                  if (pathName.includes('/o/')) {
-                    const objectPathEncoded = pathName.substring(pathName.indexOf('/o/') + 3);
-                    parsedUser.avatar.imagePath = decodeURIComponent(objectPathEncoded);
-                    console.log("AuthContext: Updated imagePath for stored user avatar:", parsedUser.avatar.imagePath);
-                  }
-                } catch (e) {
-                  console.warn("AuthContext: Could not parse imagePath from stored avatar imageUrl", e);
+      if (storedAppUserString) {
+        try {
+          const parsedUser = JSON.parse(storedAppUserString) as AppUser;
+          // Validate if the loaded user matches the current auth state (e.g. guest vs authenticated)
+          const isStoredUserGuest = parsedUser.id.startsWith('guest_');
+          const isCurrentAuthGuest = !currentFirebaseUser;
+
+          if (isStoredUserGuest === isCurrentAuthGuest && (!currentFirebaseUser || parsedUser.id === currentFirebaseUser.uid)) {
+            console.log("AuthContext: Found matching AppUser in localStorage:", parsedUser.id);
+             // Ensure avatar imagePath is correctly set if imageUrl is from Firebase Storage
+            if (parsedUser.avatar && parsedUser.avatar.imageUrl && parsedUser.avatar.imageUrl.includes('firebasestorage.googleapis.com') && !parsedUser.avatar.imagePath) {
+              try {
+                const url = new URL(parsedUser.avatar.imageUrl);
+                const pathName = url.pathname;
+                if (pathName.includes('/o/')) {
+                  const objectPathEncoded = pathName.substring(pathName.indexOf('/o/') + 3);
+                  parsedUser.avatar.imagePath = decodeURIComponent(objectPathEncoded);
                 }
-              }
-              appUserToSet = parsedUser;
-            } else {
-              console.warn("AuthContext: Stored AppUser ID mismatch or invalid. Creating new one.");
-              appUserToSet = createNewAppUser(currentFirebaseUser, false);
+              } catch (e) { /* ignore */ }
             }
-          } catch (e) {
-            console.error("AuthContext: Failed to parse stored AppUser. Creating new one.", e);
-            appUserToSet = createNewAppUser(currentFirebaseUser, false);
-          }
-        } else {
-          console.log("AuthContext: No AppUser found in localStorage for authenticated user. Creating new one.");
-          appUserToSet = createNewAppUser(currentFirebaseUser, false);
-        }
-        
-        if (appUserToSet) {
-          localStorage.setItem(userKey, JSON.stringify(appUserToSet));
-           // If the guest user was previously active, remove its localStorage entry
-          const guestKey = `${USER_LOCAL_STORAGE_KEY_PREFIX}guest`;
-          if (currentAppUser && currentAppUser.id.startsWith('guest_')) {
-            localStorage.removeItem(guestKey);
-            console.log("AuthContext: Removed guest user data from localStorage.");
-          }
-        }
+            // Ensure all fields exist, merge with defaults if necessary for older stored objects
+            appUserToSet = {
+              ...createNewAppUser(currentFirebaseUser, isCurrentAuthGuest), // provides defaults for all fields
+              ...parsedUser, // overrides defaults with stored values
+              id: parsedUser.id, // ensure ID is from parsed user if valid
+              name: parsedUser.name || createNewAppUser(currentFirebaseUser, isCurrentAuthGuest).name,
+              avatar: parsedUser.avatar || createNewAppUser(currentFirebaseUser, isCurrentAuthGuest).avatar,
+              hormoneLevels: parsedUser.hormoneLevels || getRandomHormone(),
+              moodLogs: parsedUser.moodLogs || [],
+              tasks: parsedUser.tasks && parsedUser.tasks.length > 0 ? parsedUser.tasks : getDefaultTasks(),
+              rewards: parsedUser.rewards && parsedUser.rewards.length > 0 ? parsedUser.rewards : getDefaultRewards(isCurrentAuthGuest),
+              neuroPoints: typeof parsedUser.neuroPoints === 'number' ? parsedUser.neuroPoints : 0,
+              streak: typeof parsedUser.streak === 'number' ? parsedUser.streak : 0,
+              lastCompletedDay: typeof parsedUser.lastCompletedDay === 'number' ? parsedUser.lastCompletedDay : null,
+            };
 
+          } else {
+            console.warn(`AuthContext: Stored AppUser type mismatch (guest/auth) or ID mismatch. Stored ID: ${parsedUser.id}, Firebase UID: ${currentFirebaseUser?.uid}. Creating new one.`);
+            appUserToSet = createNewAppUser(currentFirebaseUser, !currentFirebaseUser);
+          }
+        } catch (e) {
+          console.error("AuthContext: Failed to parse stored AppUser. Creating new one.", e);
+          appUserToSet = createNewAppUser(currentFirebaseUser, !currentFirebaseUser);
+        }
       } else {
-        // Guest user or signed out
-        console.log("AuthContext: No Firebase user. Setting up guest AppUser.");
-        const guestUserKey = `${USER_LOCAL_STORAGE_KEY_PREFIX}guest`;
-        const storedGuestUserString = localStorage.getItem(guestUserKey);
-        
-        if (storedGuestUserString) {
-          try {
-            const parsedGuestUser = JSON.parse(storedGuestUserString) as AppUser;
-            if (parsedGuestUser && parsedGuestUser.id.startsWith('guest_')) {
-              console.log("AuthContext: Found guest AppUser in localStorage:", parsedGuestUser);
-              appUserToSet = parsedGuestUser;
-            } else {
-               console.warn("AuthContext: Stored guest AppUser invalid. Creating new one.");
-               appUserToSet = createNewAppUser(null, true);
-            }
-          } catch (e) {
-            console.error("AuthContext: Failed to parse stored guest AppUser. Creating new one.", e);
-            appUserToSet = createNewAppUser(null, true);
+        console.log(`AuthContext: No AppUser found in localStorage for key ${userKey}. Creating new one.`);
+        appUserToSet = createNewAppUser(currentFirebaseUser, !currentFirebaseUser);
+      }
+      
+      if (appUserToSet) {
+        localStorage.setItem(userKey, JSON.stringify(appUserToSet));
+        // If switching from guest to authenticated, remove old guest data if it exists and is different
+        if (currentFirebaseUser && currentAppUser?.id?.startsWith('guest_')) {
+          const guestKey = `${USER_LOCAL_STORAGE_KEY_PREFIX}guest`;
+          if (userKey !== guestKey) { // Ensure we don't delete the key we just wrote if user becomes guest
+            localStorage.removeItem(guestKey);
+            console.log("AuthContext: Removed previous guest user data from localStorage.");
           }
-        } else {
-          console.log("AuthContext: No guest AppUser in localStorage. Creating new one.");
-          appUserToSet = createNewAppUser(null, true);
-        }
-
-        if (appUserToSet) {
-          localStorage.setItem(guestUserKey, JSON.stringify(appUserToSet));
         }
       }
       
-      console.log("AuthContext: Setting AppUser in UserContext:", appUserToSet);
+      console.log("AuthContext: Setting AppUser in UserContext:", appUserToSet?.id);
       setAppUser(appUserToSet);
       setLoading(false); 
       console.log("AuthContext: Loading state set to false.");
@@ -164,8 +175,10 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       console.log("AuthContext: Unsubscribing from onAuthStateChanged.");
       unsubscribe();
     };
+  // currentAppUser removed from deps to avoid re-triggering excessively.
+  // The core logic depends on firebaseUser and what's in localStorage for that user type.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setAppUser]); // currentAppUser removed from deps to avoid potential loops if it's not stable
+  }, [setAppUser]); 
 
 
   return (

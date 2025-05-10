@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import type { MoodLog } from "@/types/mood";
+import type { MoodLog, Mood } from "@/types/mood"; // Added Mood type
 import { Header } from "@/components/Header";
 import { MoodLogForm } from "@/components/mood/MoodLogForm";
 import { MoodChart } from "@/components/mood/MoodChart";
@@ -17,26 +18,23 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input"; 
 import { Textarea } from "@/components/ui/textarea";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, getDayOfYear } from "date-fns";
 import TaskService from "@/components/task/TaskService";
 import type { Task as AppTask } from "@/types/task"; 
-import type { Hormone } from "@/types/hormone";
 import type { Reward } from "@/types/reward";
 import RewardDisplay from "@/components/rewards/RewardDisplay";
 import { getAICoachNudge, useClientSideRandom } from "@/ai/coach";
-import { AICoachCard } from "@/components/coach/AICoachCard"; // Import the new AICoachCard
+import { AICoachCard } from "@/components/coach/AICoachCard";
 import ContentDisplay from "@/components/content/ContentDisplay";
 import type { User as AppUser } from "@/types/user"; 
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle, ChevronDown, MessageCircle } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow"; 
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
-import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
 import { requestNotificationPermission, onMessageListener } from '@/lib/firebase-messaging';
-import { cn } from "@/lib/utils";
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
 import { signOutUser } from '@/services/authService'; 
@@ -47,96 +45,31 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-
-
-const LOCAL_STORAGE_KEY_TASKS_PREFIX = "vibeCheckTasks_";
-const LOCAL_STORAGE_KEY_REWARDS_PREFIX = "vibeCheckRewards_";
-const LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX = "vibeCheckNeuroPoints_";
+import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
 
 
 function MainAppInterface() {
-  const { moodLogs, handleLogMood: contextHandleLogMood } = useMoodLogs();
   const { authUser } = useAuth(); 
   const { user: appUser, setUser: setAppUser } = useAppUser(); 
-
+  const { moodLogs, addMoodLog } = useMoodLogs();
   const { toast } = useToast();
   const [isClient, setIsClient] = useState(false);
   
-  const [tasks, setTasks] = useState<AppTask[]>([]);
-  const [neuroPoints, setNeuroPoints] = useState<number>(0);
-  const [rewards, setRewards] = useState<Reward[]>([]);
   const [avatarDescription, setAvatarDescription] = useState<string>("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
-
-  // Profile Editing State
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
   const [editingName, setEditingName] = useState<string>("");
 
-
-  const getLocalStorageKey = (prefix: string, userId?: string | null) => {
-    if (!userId) { 
-        console.warn("getLocalStorageKey: userId is null or undefined, using fallback key.");
-        return `${prefix}default_fallback_no_id`; 
-    }
-    return `${prefix}${userId}`;
-  };
+  const taskService = useMemo(() => new TaskService(), []); // TaskService is now stateless
 
   useEffect(() => {
     setIsClient(true); 
   }, []);
 
-  // Load tasks, rewards, neuroPoints from localStorage when appUser is available
-  useEffect(() => {
-    if (!isClient || !appUser || !appUser.id) {
-      console.log("MainAppInterface: useEffect for loading data skipped. isClient:", isClient, "appUser:", appUser);
-      return;
-    }
-    console.log("MainAppInterface: useEffect for loading data running for user:", appUser.id);
-
-    const userSpecificId = appUser.id;
-
-    const tasksKey = getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX, userSpecificId);
-    const storedTasks = localStorage.getItem(tasksKey);
-    setTasks(storedTasks ? JSON.parse(storedTasks) : []);
-    
-    const rewardsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX, userSpecificId);
-    const storedRewards = localStorage.getItem(rewardsKey);
-    setRewards(storedRewards ? JSON.parse(storedRewards) : (
-        userSpecificId.startsWith('guest_') ? 
-        [{ id: generateId(), name: "Quick Vibe Boost (Guest)", description: "A little something for our guest!", pointsRequired: 20, isUnlocked: false, type: "virtual" }]
-        :
-        [{ id: generateId(), name: "15 Min Guided Chill Sesh", description: "Unlock a new meditation track. Issa vibe.", pointsRequired: 50, isUnlocked: false, type: "virtual" },
-         { id: generateId(), name: "Affirmation Pack Drop", description: "Get a fresh pack of positive affirmations. You got this!", pointsRequired: 100, isUnlocked: false, type: "virtual" }]
-    ));
-    
-    const pointsKey = getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX, userSpecificId);
-    const storedPoints = localStorage.getItem(pointsKey);
-    setNeuroPoints(storedPoints ? JSON.parse(storedPoints) : 0);
-
-  }, [isClient, appUser]);
-
-
-  useEffect(() => {
-    if (isClient && appUser && appUser.id) { 
-      console.log("MainAppInterface: useEffect for saving data running for user:", appUser.id);
-      const userSpecificId = appUser.id;
-      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_TASKS_PREFIX, userSpecificId), JSON.stringify(tasks));
-      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_REWARDS_PREFIX, userSpecificId), JSON.stringify(rewards));
-      localStorage.setItem(getLocalStorageKey(LOCAL_STORAGE_KEY_NEUROPOINTS_PREFIX, userSpecificId), JSON.stringify(neuroPoints));
-    }
-  }, [tasks, rewards, neuroPoints, isClient, appUser]); 
-
-
-  const taskService = useMemo(() => {
-    if (!isClient || !appUser) return null; 
-    return new TaskService(appUser);
-  }, [appUser, isClient]);
-
-
+  // FCM Token Setup Effect
   useEffect(() => {
     if (isClient && authUser && appUser && !appUser.id.startsWith('guest_') && setAppUser) { 
-      console.log("MainAppInterface: Setting up FCM for user:", authUser.uid);
       requestNotificationPermission().then(async token => {
         if (token) {
           const result = await storeUserFCMToken(authUser.uid, token); 
@@ -159,70 +92,88 @@ function MainAppInterface() {
   }, [isClient, authUser, appUser, setAppUser, toast]);
 
 
+  // AI Task Suggestions Effect
   useEffect(() => {
-    if (isClient && tasks.length === 0 && taskService && appUser) {
-      console.log("MainAppInterface: Initializing default tasks for user:", appUser.id);
-      const initializeTasks = async () => {
-        const defaultTaskData: Omit<AppTask, 'id' | 'isCompleted' | 'rewardPoints'>[] = [
-          { name: "10 min Zen Time", description: "Quick mindfulness meditation. Slay.", hasNeuroBoost: true },
-          { name: "30 min Move Sesh", description: "Get that body movin'. No cap.", hasNeuroBoost: false },
-        ];
-        
-        const newTasksPromises = defaultTaskData.map(async (taskData) => {
-          if(!taskService || !appUser) return null; 
-          const points = await taskService.calculateRewardPointsForTask(taskData.description, appUser.moodLogs?.[0]?.mood || 'Neutral', appUser.hormoneLevels);
-          return taskService.createTask({...taskData, rewardPoints: points});
-        });
-        const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
-        setTasks(newTasks);
-      };
-      initializeTasks();
-    }
-  }, [isClient, taskService, appUser, tasks.length]);
+    const fetchTaskSuggestions = async () => {
+     if (isClient && appUser && appUser.moodLogs && appUser.tasks.length <= 5 && !appUser.id.startsWith('guest_')) {
+       const suggestedTaskDetailsOutput = await taskService.getSuggestedTasks(appUser.moodLogs, appUser.hormoneLevels, appUser.tasks);
+       if (suggestedTaskDetailsOutput && suggestedTaskDetailsOutput.suggestions) {
+         const newTasksPromises = suggestedTaskDetailsOutput.suggestions.map(async (taskDetail) => {
+            const points = await taskService.calculateRewardPointsForTask(taskDetail.description, appUser.moodLogs?.[0]?.mood || 'Neutral', appUser.hormoneLevels);
+            return taskService.createTaskObject({ 
+              name: taskDetail.name,
+              description: taskDetail.description,
+              hasNeuroBoost: taskDetail.hasNeuroBoost,
+              rewardPoints: points, 
+            });
+         });
+         const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
+         
+         setAppUser(prevUser => {
+           if (!prevUser) return null;
+           const existingTaskNames = new Set(prevUser.tasks.map(t => t.name));
+           const uniqueNewTasks = newTasksResult.filter(nt => !existingTaskNames.has(nt.name));
+           return { ...prevUser, tasks: [...prevUser.tasks, ...uniqueNewTasks] };
+         });
+       }
+     }
+   };
+   
+   if (appUser && appUser.moodLogs && appUser.moodLogs.length > 0 && !appUser.id.startsWith('guest_')) { 
+      fetchTaskSuggestions();
+   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isClient, taskService, appUser?.id, appUser?.moodLogs?.length, appUser?.tasks?.length]); 
 
 
   const handleFirebaseSignOutInternal = async () => {
-    console.log("MainAppInterface: handleFirebaseSignOutInternal called.");
     const result = await signOutUser(); 
     if (result.success) {
-      toast({
-        title: "Signed Out! 👋",
-        description: "You've successfully signed out. Catch ya later!",
-      });
+      toast({ title: "Signed Out! 👋", description: "You've successfully signed out. Catch ya later!"});
     } else {
-      toast({
-        title: "Sign-Out Fail 😥",
-        description: `Couldn't sign you out: ${result.message || 'Unknown error'}`,
-        variant: "destructive",
-      });
+      toast({ title: "Sign-Out Fail 😥", description: `Couldn't sign you out: ${result.message || 'Unknown error'}`, variant: "destructive"});
     }
   };
 
+  // handleLogMood is now taken from MoodLogsContext
+  // const handleLogMood = (newLogData: Omit<MoodLog, 'id'>) => {
+  //   if (!appUser || !setAppUser) return;
+  //   const newLog: MoodLog = { ...newLogData, id: generateId() };
+  //   setAppUser(prevUser => {
+  //     if (!prevUser) return null;
+  //     const updatedMoodLogs = [newLog, ...(prevUser.moodLogs || [])].sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
+  //     return { ...prevUser, moodLogs: updatedMoodLogs };
+  //   });
+  // };
+
   const handleTaskCompletion = async (taskId: string) => {
-    if (!taskService || !appUser || !setAppUser) return; 
-    const taskToComplete = tasks.find(t => t.id === taskId);
+    if (!appUser || !setAppUser) return;
+    const taskToComplete = appUser.tasks.find(t => t.id === taskId);
     if (!taskToComplete || taskToComplete.isCompleted) return;
 
-    const updatedTask = taskService.updateTask(taskId, { isCompleted: true });
-    if (updatedTask) {
-      setTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
-      setNeuroPoints(prevPoints => prevPoints + (updatedTask.rewardPoints * (updatedTask.hasNeuroBoost ? 10 : 1)));
-      
-      // Update AppUser state correctly
-      const currentAppUser = appUser; // Capture current state
-      const newCompletedTasks = [...(currentAppUser.completedTasks || []), updatedTask];
-      setAppUser({
-        ...currentAppUser,
-        completedTasks: newCompletedTasks,
-        streak: taskService.user.streak 
-      });
+    const updatedTasks = taskService.updateTaskInList(taskId, { isCompleted: true }, appUser.tasks);
+    const completedTask = updatedTasks.find(t => t.id === taskId); // Get the updated task
 
+    if (completedTask) {
+      const newNeuroPoints = appUser.neuroPoints + (completedTask.rewardPoints * (completedTask.hasNeuroBoost ? 10 : 1));
+      const { newStreak, newLastCompletedDay } = taskService.calculateNewStreak(appUser.lastCompletedDay);
+      
+      setAppUser(prevUser => {
+        if (!prevUser) return null;
+        return { 
+          ...prevUser, 
+          tasks: updatedTasks,
+          neuroPoints: newNeuroPoints,
+          streak: newStreak,
+          lastCompletedDay: newLastCompletedDay
+        };
+      });
 
       if (authUser && appUser.fcmToken && !appUser.id.startsWith('guest_')) { 
         sendNotificationToUser(authUser.uid, { 
           title: "Quest Smashed! 🚀",
-          body: `You just crushed '${updatedTask.name}'! Keep that W energy!`,
-          data: { taskId: updatedTask.id }
+          body: `You just crushed '${completedTask.name}'! Keep that W energy!`,
+          data: { taskId: completedTask.id }
         }).then(response => {
           if (response.success) console.log("Task completion notification sent!");
           else console.error("Failed to send task completion notification:", response.message);
@@ -233,16 +184,18 @@ function MainAppInterface() {
   
   const handleClaimReward = (rewardId: string) => {
     if (!appUser || !setAppUser) return;
-    const rewardToClaim = rewards.find(r => r.id === rewardId);
-    if (rewardToClaim && !rewardToClaim.isUnlocked && neuroPoints >= rewardToClaim.pointsRequired) {
-      setNeuroPoints(prev => prev - rewardToClaim.pointsRequired);
-      setRewards(prevRewards => prevRewards.map(r => r.id === rewardId ? {...r, isUnlocked: true} : r));
-       // Update AppUser state correctly
-      const currentAppUser = appUser; // Capture current state
-      const newClaimedRewards = [...(currentAppUser.claimedRewards || []), {...rewardToClaim, isUnlocked: true}];
-      setAppUser({
-        ...currentAppUser,
-        claimedRewards: newClaimedRewards
+    const rewardToClaim = appUser.rewards.find(r => r.id === rewardId);
+    if (rewardToClaim && !rewardToClaim.isUnlocked && appUser.neuroPoints >= rewardToClaim.pointsRequired) {
+      const newNeuroPoints = appUser.neuroPoints - rewardToClaim.pointsRequired;
+      const updatedRewards = appUser.rewards.map(r => r.id === rewardId ? {...r, isUnlocked: true} : r);
+      
+      setAppUser(prevUser => {
+        if (!prevUser) return null;
+        return { 
+          ...prevUser, 
+          rewards: updatedRewards,
+          neuroPoints: newNeuroPoints,
+        };
       });
     }
   };
@@ -260,15 +213,18 @@ function MainAppInterface() {
         description: avatarDescription,
         previousAvatarPath: appUser.avatar?.imagePath 
       });
-      const currentAppUser = appUser;
-      setAppUser({
-        ...currentAppUser,
-        avatar: {
-          ...(currentAppUser.avatar || { id: generateId(), name: 'New Avatar', description: '' }), 
-          imageUrl: result.imageUrl,
-          imagePath: result.imagePath, 
-          description: `AI-generated: ${avatarDescription}`, 
-        }
+      setAppUser(prevUser => {
+        if (!prevUser) return null;
+        return {
+          ...prevUser,
+          avatar: {
+            id: prevUser.avatar?.id || generateId(),
+            name: prevUser.avatar?.name || 'New Avatar',
+            imageUrl: result.imageUrl,
+            imagePath: result.imagePath, 
+            description: `AI-generated: ${avatarDescription}`, 
+          }
+        };
       });
       toast({ title: "Avatar Leveled Up! ✨🚀", description: "Your new AI-generated vibe is live! Looking fresh!" });
       setAvatarDescription(""); 
@@ -320,7 +276,7 @@ function MainAppInterface() {
     setIsEditingProfile(false);
   };
 
-  const incompleteTasks = useMemo(() => tasks.filter(t => !t.isCompleted), [tasks]);
+  const incompleteTasks = useMemo(() => appUser?.tasks.filter(t => !t.isCompleted) || [], [appUser?.tasks]);
   const randomIncompleteTask = useClientSideRandom(incompleteTasks);
   
   const aiNudge = useMemo(() => {
@@ -328,40 +284,9 @@ function MainAppInterface() {
     return getAICoachNudge(appUser, randomIncompleteTask ?? null);
   }, [appUser, randomIncompleteTask, isClient]);
 
-  const existingDates = moodLogs.map((log) => log.date);
-
-  useEffect(() => {
-     const fetchTaskSuggestions = async () => {
-      if (isClient && taskService && appUser && moodLogs && !appUser.id.startsWith('guest_')) { 
-        const suggestedTaskDetails = await taskService.getSuggestedTasks(moodLogs, appUser.hormoneLevels, appUser.completedTasks); 
-        if (suggestedTaskDetails && suggestedTaskDetails.suggestions) {
-          const newTasksPromises = suggestedTaskDetails.suggestions.map(async (taskDetail) => {
-            if(!taskService || !appUser) return null;
-            return taskService.createTask({ 
-              name: taskDetail.name,
-              description: taskDetail.description,
-              hasNeuroBoost: taskDetail.hasNeuroBoost,
-              rewardPoints: taskDetail.rewardPoints, 
-            });
-          });
-          const newTasksResult = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
-          setTasks(prevTasks => {
-            const existingTaskNames = new Set(prevTasks.map(t => t.name));
-            const uniqueNewTasks = newTasksResult.filter(nt => !existingTaskNames.has(nt.name));
-            return [...prevTasks, ...uniqueNewTasks]; 
-          });
-        }
-      }
-    };
-    
-    if (appUser && tasks.length <= 5 && moodLogs && moodLogs.length > 0 && !appUser.id.startsWith('guest_')) { 
-       fetchTaskSuggestions();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, taskService, appUser, moodLogs]); 
+  const existingDates = moodLogs.map((log) => log.date) || [];
   
-  if (!isClient || !appUser || (tasks.length === 0 && (!taskService || !appUser.id)) ) { 
-    console.log("MainAppInterface: Displaying loading state. isClient:", isClient, "appUser:", appUser, "tasks.length:", tasks.length, "taskService:", !!taskService);
+  if (!isClient || !appUser ) { 
     return (
         <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
             <Loader2 className="h-12 w-12 text-accent animate-spin mb-4" />
@@ -369,7 +294,6 @@ function MainAppInterface() {
         </div>
     );
   }
-
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -404,10 +328,10 @@ function MainAppInterface() {
               </CardHeader>
               <CardContent className="p-5 flex flex-col items-center space-y-4 bg-background">
                 <AvatarDisplay 
-                  avatar={appUser?.avatar || null} 
+                  avatar={appUser.avatar || null} 
                   size={100} 
                 />
-                {isEditingProfile && appUser ? (
+                {isEditingProfile ? (
                   <div className="w-full space-y-3">
                     <Input
                       type="text"
@@ -426,18 +350,17 @@ function MainAppInterface() {
                     </div>
                   </div>
                 ) : (
-                  <h2 className="text-2xl font-bold tracking-tight text-center text-foreground">{appUser?.name || "Vibe User"}</h2>
+                  <h2 className="text-2xl font-bold tracking-tight text-center text-foreground">{appUser.name || "Vibe User"}</h2>
                 )}
                 <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Streak: <span className="font-bold text-amber-500">{appUser?.streak || 0} days</span> <Zap className="inline h-4 w-4 text-amber-400 fill-amber-400" /></p>
-                    <p className="text-3xl font-extrabold text-primary drop-shadow-md mt-1">VibePoints: {neuroPoints} VP</p>
+                    <p className="text-sm text-muted-foreground">Streak: <span className="font-bold text-amber-500">{appUser.streak || 0} days</span> <Zap className="inline h-4 w-4 text-amber-400 fill-amber-400" /></p>
+                    <p className="text-3xl font-extrabold text-primary drop-shadow-md mt-1">VibePoints: {appUser.neuroPoints} VP</p>
                 </div>
-                 {/* Integrate AICoachCard here */}
-                {appUser && <AICoachCard user={appUser} nudge={aiNudge} />}
+                <AICoachCard user={appUser} nudge={aiNudge} />
 
               </CardContent>
               <CardFooter className="p-5 bg-background border-t border-border/30 flex justify-center">
-                {authUser && appUser?.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
+                {authUser && appUser.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
               </CardFooter>
             </Card>
 
@@ -457,17 +380,17 @@ function MainAppInterface() {
                   onChange={(e) => setAvatarDescription(e.target.value)}
                   maxLength={200}
                   className="min-h-[100px] focus:bg-background shadow-inner"
-                  disabled={isGeneratingAvatar || (appUser && appUser.id.startsWith('guest_'))} 
+                  disabled={isGeneratingAvatar || appUser.id.startsWith('guest_')} 
                 />
                 <Button
                   onClick={handleGenerateAvatar}
-                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || (appUser && appUser.id.startsWith('guest_'))}
+                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || appUser.id.startsWith('guest_')}
                   className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
                   {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  {isGeneratingAvatar ? "AI Makin' Magic..." : ((appUser && appUser.id.startsWith('guest_')) ? "Sign In to Generate" : "Generate My Vibe!")}
+                  {isGeneratingAvatar ? "AI Makin' Magic..." : (appUser.id.startsWith('guest_') ? "Sign In to Generate" : "Generate My Vibe!")}
                 </Button>
-                 {(appUser && appUser.id.startsWith('guest_')) && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
+                 {appUser.id.startsWith('guest_') && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
               </CardContent>
             </Card>
           </section>
@@ -483,7 +406,7 @@ function MainAppInterface() {
                 </CardDescription>
               </CardHeader>
                 <CardContent>
-                  <MoodLogForm onLogMood={contextHandleLogMood} existingDates={existingDates} />
+                  <MoodLogForm onLogMood={addMoodLog} existingDates={existingDates} />
                 </CardContent>
             </Card>
 
@@ -494,47 +417,45 @@ function MainAppInterface() {
                  <CardContent><MoodChart moodLogs={moodLogs} /></CardContent>
             </Card>
 
-            {appUser && (
-              <Accordion type="single" collapsible className="w-full shadow-lg rounded-xl border border-primary/30">
-                <AccordionItem value="item-1">
-                  <Card className="border-none rounded-xl">
-                    <AccordionTrigger className="w-full p-0 hover:no-underline">
-                      <CardHeader className="flex flex-row items-center justify-between w-full pb-2 hover:bg-primary/5 rounded-t-xl group">
-                        <div className="flex items-center gap-2">
-                          <Brain className="h-6 w-6 text-primary" />
-                          <CardTitle className="drop-shadow-sm font-extrabold text-xl text-primary">Brain Juice Levels</CardTitle>
-                        </div>
-                        <ChevronDown className="h-5 w-5 text-primary transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                      </CardHeader>
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-4">
-                        <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
-                        <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
-                        <div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500">
-                                <path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/>
-                            </svg>
-                            Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span>
-                        </div>
-                        <div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500">
-                                <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/>
-                            </svg>
-                            Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span>
-                        </div>
-                      </CardContent>
-                       <CardContent className="pt-2 text-sm text-muted-foreground">
-                        <p>These levels are estimated based on your logged moods and activities. Click to learn more about how each hormone impacts your vibe!</p>
-                      </CardContent>
-                      <CardDescription className="px-6 pb-4 text-xs text-muted-foreground/70">
-                        Peep what your brain's cookin' up, bestie. Levels adjust based on your mood logs & tasks.
-                      </CardDescription>
-                    </AccordionContent>
-                  </Card>
-                </AccordionItem>
-              </Accordion>
-            )}
+            <Accordion type="single" collapsible className="w-full shadow-lg rounded-xl border border-primary/30">
+              <AccordionItem value="item-1">
+                <Card className="border-none rounded-xl">
+                  <AccordionTrigger className="w-full p-0 hover:no-underline">
+                    <CardHeader className="flex flex-row items-center justify-between w-full pb-2 hover:bg-primary/5 rounded-t-xl group">
+                      <div className="flex items-center gap-2">
+                        <Brain className="h-6 w-6 text-primary" />
+                        <CardTitle className="drop-shadow-sm font-extrabold text-xl text-primary">Brain Juice Levels</CardTitle>
+                      </div>
+                      <ChevronDown className="h-5 w-5 text-primary transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </CardHeader>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-4">
+                      <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
+                      <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
+                      <div>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500">
+                              <path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/>
+                          </svg>
+                          Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span>
+                      </div>
+                      <div>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500">
+                              <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/>
+                          </svg>
+                          Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span>
+                      </div>
+                    </CardContent>
+                     <CardContent className="pt-2 text-sm text-muted-foreground">
+                      <p>These levels are estimated based on your logged moods and activities. Click to learn more about how each hormone impacts your vibe!</p>
+                    </CardContent>
+                    <CardDescription className="px-6 pb-4 text-xs text-muted-foreground/70">
+                      Peep what your brain's cookin' up, bestie. Levels adjust based on your mood logs & tasks.
+                    </CardDescription>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+            </Accordion>
 
             <Card className="shadow-lg">
               <CardHeader>
@@ -542,9 +463,9 @@ function MainAppInterface() {
                  <CardDescription className="text-muted-foreground">Small W's = Big Vibe Energy. Complete quests to get VibePoints!</CardDescription>
               </CardHeader>
               <CardContent>
-                {tasks.length > 0 ? (
+                {appUser.tasks.length > 0 ? (
                   <div className="space-y-3">
-                  {tasks.map((task) => (
+                  {appUser.tasks.map((task) => (
                     <div key={task.id} className={`p-4 border rounded-xl flex justify-between items-center transition-all ${task.isCompleted ? "bg-muted opacity-60 shadow-inner" : "bg-card hover:shadow-md"}`}>
                       <div>
                         <h4 className={`font-medium ${task.isCompleted ? "line-through text-muted-foreground" : "text-card-foreground"}`}>{task.name}</h4>
@@ -584,7 +505,7 @@ function MainAppInterface() {
         </div>
         
         <section className="lg:col-span-3 space-y-6 mt-10">
-           <RewardDisplay rewards={rewards} neuroPoints={neuroPoints} onClaimReward={handleClaimReward} />
+           <RewardDisplay rewards={appUser.rewards} neuroPoints={appUser.neuroPoints} onClaimReward={handleClaimReward} />
         </section>
         <section className="lg:col-span-3 space-y-6 mt-10">
            <CommunityDisplay />
@@ -605,7 +526,7 @@ export default function RootPage() {
   return (
     <AppUserProvider> 
       <AuthContextProvider> 
-        <MoodLogsProvider>
+        <MoodLogsProvider> {/* Added MoodLogsProvider here */}
           <AppPageLogic />
         </MoodLogsProvider>
       </AuthContextProvider>
@@ -619,31 +540,32 @@ function AppPageLogic() {
   const { toast } = useToast(); 
   const [guestSessionActive, setGuestSessionActive] = useState(false);
   
-  console.log("AppPageLogic: Rendering. AuthLoading:", authLoading, "AppUser:", appUser, "AuthUser:", authUser, "GuestSessionActive:", guestSessionActive);
-
+  // console.log("AppPageLogic: Rendering. AuthLoading:", authLoading, "AppUser:", appUser?.id, "AuthUser:", authUser?.uid, "GuestSessionActive:", guestSessionActive);
 
   const handleGuestSignIn = async () => {
-    console.log("AppPageLogic: handleGuestSignIn called.");
-    const result = await signOutUser(); 
-    if(result.success || result.message?.includes("No user to sign out") || result.message?.includes("auth object not initialized")){
-         toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
-         console.log("AppPageLogic: Sign out successful or no user was signed in. AuthContext will handle guest user setup.");
-         setGuestSessionActive(true); 
-    } else {
-        toast({ title: "Guest Mode Hiccup", description: `Could not ensure guest mode cleanly: ${result.message}.`, variant: "destructive" });
-        console.error("AppPageLogic: Error during guest sign-in (sign-out attempt):", result.message);
+    // console.log("AppPageLogic: handleGuestSignIn called.");
+    // Clear any existing Firebase auth session first
+    if (auth.currentUser) { // `auth` should be imported from '@/lib/firebase' or available in scope
+        await signOutUser(); // Ensure previous session is cleared
     }
+    // AuthContext will handle creating a new guest AppUser
+    setGuestSessionActive(true); 
+    toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest. Some features may be limited."});
   };
 
   useEffect(() => {
-    if (authUser) {
+    if (authUser) { // If there's a Firebase authenticated user
+      setGuestSessionActive(false); // Ensure guest session is marked as inactive
+    } else if (appUser && appUser.id.startsWith('guest_')) { // If no Firebase user, but appUser is guest
+      setGuestSessionActive(true);
+    } else { // No Firebase user and appUser is not guest (or null), set guest session false
       setGuestSessionActive(false);
     }
-  }, [authUser]);
+  }, [authUser, appUser]);
 
 
-  if (authLoading) { 
-    console.log("AppPageLogic: Auth loading...");
+  if (authLoading || (!appUser && !guestSessionActive)) { 
+    // console.log("AppPageLogic: Auth loading or appUser not yet initialized...");
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
         <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
@@ -652,29 +574,14 @@ function AppPageLogic() {
       </div>
     );
   }
-
-  if (!appUser) { 
-     console.log("AppPageLogic: AppUser is null after auth loading. AuthContext might still be setting it up or UserContext is initializing.");
-     return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
-        <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
-        <h1 className="text-3xl font-bold text-primary mb-2">Vibe Check</h1>
-        <p className="text-muted-foreground">Finalizing your vibe profile... ほぼ完了! (Almost there!)</p>
-      </div>
-    );
-  }
   
-  if (authUser) {
-     console.log("AppPageLogic: Firebase authUser exists. Rendering MainAppInterface.");
+  // If there is an authenticated Firebase user OR a guest session is active and appUser is a guest user
+  if (authUser || (guestSessionActive && appUser?.id.startsWith('guest_'))) {
+    // console.log("AppPageLogic: AuthUser exists or guest session active. Rendering MainAppInterface.");
      return <MainAppInterface />;
   }
-
-  if (guestSessionActive && appUser?.id?.startsWith('guest_')) {
-    console.log("AppPageLogic: Guest session is active. Rendering MainAppInterface for guest.");
-    return <MainAppInterface />;
-  }
   
-  console.log("AppPageLogic: No Firebase authUser and guest session not active. Showing login/guest choice page.");
+  // console.log("AppPageLogic: No Firebase authUser and guest session not active. Showing login/guest choice page.");
   return (
     <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
       <div className="text-center space-y-6 w-full max-w-md p-8 bg-card shadow-xl rounded-2xl border border-border">
@@ -709,4 +616,3 @@ function AppPageLogic() {
   );
 }
 
-    
