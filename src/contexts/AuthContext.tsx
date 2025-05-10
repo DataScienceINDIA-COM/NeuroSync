@@ -11,6 +11,7 @@ import { generateId } from '@/lib/utils';
 import { getRandomHormone } from '@/ai/hormone-prediction';
 import type { Task } from '@/types/task';
 import type { Reward } from '@/types/reward';
+import { getUserOnboardingStatusAction } from '@/actions/user-actions'; // Import the new server action
 
 interface AuthContextType {
   authUser: FirebaseUser | null; 
@@ -84,13 +85,13 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       rewards: getDefaultRewards(isGuest),
       neuroPoints: 0,
       fcmToken: undefined, 
-      onboardingCompleted: false, // Initialize onboardingCompleted
+      onboardingCompleted: false, 
     };
     return newProfile;
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentFirebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentFirebaseUser) => {
       setAuthUser(currentFirebaseUser); 
       let appUserToSet: AppUser | null = null;
       
@@ -106,7 +107,9 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
           const isStoredUserGuest = parsedUser.id.startsWith('guest_');
           const isCurrentAuthGuest = !currentFirebaseUser;
 
-          if (isStoredUserGuest === isCurrentAuthGuest && (!currentFirebaseUser || parsedUser.id === currentFirebaseUser.uid)) {
+          // Ensure we are loading the correct user profile (guest vs registered)
+          // and also handle cases where a guest user signs in.
+          if (isStoredUserGuest === isCurrentAuthGuest && (!currentFirebaseUser || parsedUser.id === currentFirebaseUser.uid || (isStoredUserGuest && isCurrentAuthGuest) )) {
             if (parsedUser.avatar && parsedUser.avatar.imageUrl && parsedUser.avatar.imageUrl.includes('firebasestorage.googleapis.com') && !parsedUser.avatar.imagePath) {
               try {
                 const url = new URL(parsedUser.avatar.imageUrl);
@@ -120,7 +123,7 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
             appUserToSet = {
               ...createNewAppUser(currentFirebaseUser, isCurrentAuthGuest), 
               ...parsedUser, 
-              id: parsedUser.id, 
+              id: isCurrentAuthGuest && !currentFirebaseUser ? parsedUser.id : (currentFirebaseUser?.uid || parsedUser.id), // Prioritize Firebase UID for logged in users
               name: parsedUser.name || createNewAppUser(currentFirebaseUser, isCurrentAuthGuest).name,
               avatar: parsedUser.avatar || createNewAppUser(currentFirebaseUser, isCurrentAuthGuest).avatar,
               hormoneLevels: parsedUser.hormoneLevels || getRandomHormone(),
@@ -130,25 +133,38 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
               neuroPoints: typeof parsedUser.neuroPoints === 'number' ? parsedUser.neuroPoints : 0,
               streak: typeof parsedUser.streak === 'number' ? parsedUser.streak : 0,
               lastCompletedDay: typeof parsedUser.lastCompletedDay === 'number' ? parsedUser.lastCompletedDay : null,
-              fcmToken: parsedUser.fcmToken || undefined, // Ensure fcmToken is loaded
-              onboardingCompleted: typeof parsedUser.onboardingCompleted === 'boolean' ? parsedUser.onboardingCompleted : false, // Load onboardingCompleted
+              fcmToken: parsedUser.fcmToken || undefined, 
+              onboardingCompleted: typeof parsedUser.onboardingCompleted === 'boolean' ? parsedUser.onboardingCompleted : false, 
             };
-
           } else {
+            // Mismatch or new user state, create fresh
             appUserToSet = createNewAppUser(currentFirebaseUser, !currentFirebaseUser);
           }
         } catch (e) {
+          console.error("Error parsing user from localStorage, creating new user profile:", e);
           appUserToSet = createNewAppUser(currentFirebaseUser, !currentFirebaseUser);
         }
       } else {
         appUserToSet = createNewAppUser(currentFirebaseUser, !currentFirebaseUser);
       }
       
+      // If a registered user, fetch their authoritative onboarding status from Firestore
+      if (currentFirebaseUser && appUserToSet && !appUserToSet.id.startsWith('guest_')) {
+        const serverOnboardingStatus = await getUserOnboardingStatusAction(currentFirebaseUser.uid);
+        if (serverOnboardingStatus !== null) {
+          appUserToSet.onboardingCompleted = serverOnboardingStatus.onboardingCompleted;
+        }
+        // If FCM token mismatch or not set, update with currentFirebaseUser.fcmToken if available (hypothetically)
+        // Or handle FCM token update in a separate effect in page.tsx based on appUser.
+      }
+      
       if (appUserToSet) {
         localStorage.setItem(userKey, JSON.stringify(appUserToSet));
+        // If a guest user (currentAppUser.id starts with 'guest_') signs in (currentFirebaseUser exists),
+        // remove the old guest_... key from localStorage.
         if (currentFirebaseUser && currentAppUser?.id?.startsWith('guest_')) {
           const guestKey = `${USER_LOCAL_STORAGE_KEY_PREFIX}guest`;
-          if (userKey !== guestKey) { 
+          if (userKey !== guestKey) { // Ensure we don't delete if user signs out and becomes guest again with same key
             localStorage.removeItem(guestKey);
           }
         }
@@ -162,7 +178,7 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       unsubscribe();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setAppUser]); 
+  }, [setAppUser]); // currentAppUser dependency removed to avoid potential loop on appUser updates. Auth changes drive this.
 
 
   return (
