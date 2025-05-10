@@ -49,6 +49,7 @@ import {
 import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
 import { auth } from '@/lib/firebase';
 import { OnboardingDialog } from '@/components/onboarding/OnboardingDialog';
+import { completeOnboardingAction } from '@/actions/user-actions';
 
 
 function MainAppInterface() {
@@ -74,17 +75,34 @@ function MainAppInterface() {
 
   useEffect(() => {
     setIsClient(true); 
-    if (typeof window !== 'undefined' && !localStorage.getItem('onboardingCompletedV2')) {
-      setShowOnboarding(true);
-    }
+    // Onboarding check moved to AppPageLogic to ensure appUser is fully initialized
   }, []);
 
-  const handleOnboardingComplete = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('onboardingCompletedV2', 'true');
+  const handleOnboardingComplete = async () => {
+    if (appUser && setAppUser) {
+      if (!appUser.id.startsWith('guest_')) { // Only call Firestore for registered users
+        const result = await completeOnboardingAction(appUser.id);
+        if (!result.success) {
+          toast({
+            title: "Onboarding Sync Issue",
+            description: result.message || "Could not save onboarding status to server.",
+            variant: "destructive",
+          });
+        }
+      }
+      // Update local state regardless
+      setAppUser(prev => prev ? { ...prev, onboardingCompleted: true } : null);
+      setShowOnboarding(false); // Hide dialog
     }
-    setShowOnboarding(false);
   };
+
+  // Logic to determine if onboarding should be shown
+  useEffect(() => {
+    if (isClient && appUser) {
+      setShowOnboarding(!appUser.onboardingCompleted);
+    }
+  }, [isClient, appUser, appUser?.onboardingCompleted]);
+
 
   // FCM Token Setup and Foreground Message Listener Effect
   useEffect(() => {

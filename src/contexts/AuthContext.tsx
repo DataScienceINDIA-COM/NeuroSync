@@ -84,6 +84,7 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
       rewards: getDefaultRewards(isGuest),
       neuroPoints: 0,
       fcmToken: undefined, 
+      onboardingCompleted: false, // Initialize onboardingCompleted
     };
     return newProfile;
   };
@@ -130,6 +131,7 @@ export const AuthContextProvider: React.FC<{ children: ReactNode }> = ({ childre
               streak: typeof parsedUser.streak === 'number' ? parsedUser.streak : 0,
               lastCompletedDay: typeof parsedUser.lastCompletedDay === 'number' ? parsedUser.lastCompletedDay : null,
               fcmToken: parsedUser.fcmToken || undefined, // Ensure fcmToken is loaded
+              onboardingCompleted: typeof parsedUser.onboardingCompleted === 'boolean' ? parsedUser.onboardingCompleted : false, // Load onboardingCompleted
             };
 
           } else {

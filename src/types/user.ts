@@ -16,4 +16,5 @@ export type User = {
   rewards: Reward[];
   neuroPoints: number;
   fcmToken?: string; // For Firebase Cloud Messaging
+  onboardingCompleted: boolean; // Added for persistent onboarding status
 };
