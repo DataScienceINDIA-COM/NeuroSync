@@ -148,3 +148,4 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
     </Card>
   );
 }
+
