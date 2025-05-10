@@ -1,10 +1,9 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const CalculateRewardPointsInputSchema = z.object({
+const CalculateRewardPointsInputSchema = z.object({
   taskDescription: z.string().describe('The description of the task.'),
   userMood: z.string().describe('The current mood of the user.'),
   hormoneLevels: z.object({
@@ -25,7 +24,7 @@ async function calculatePointsLogic(input: CalculateRewardPointsInput): Promise<
     The reward points should be an integer between 10 and 30.
     Consider the task's difficulty (e.g., physical tasks, mentally challenging tasks, simple tasks) and the user's current state.
     Respond with only the numerical value for the reward points. For example: 15 or 25.`,
-    model: 'googleai/gemini-pro', // Using gemini-pro for better text understanding and number extraction.
+    model: 'googleai/gemini-pro', 
   });
 
   try {
@@ -41,7 +40,8 @@ async function calculatePointsLogic(input: CalculateRewardPointsInput): Promise<
   }
 }
 
-export const CalculateRewardPointsTool = ai.defineTool(
+// Define the tool but do not export it directly if this file is 'use server'
+const CalculateRewardPointsTool = ai.defineTool(
   {
     name: 'calculateRewardPointsTool', 
     description: 'Calculates the appropriate reward points for a task based on its description and the user\'s state.',
@@ -51,6 +51,7 @@ export const CalculateRewardPointsTool = ai.defineTool(
   calculatePointsLogic
 );
 
+// Export the async wrapper function
 export async function calculateRewardPoints(input: CalculateRewardPointsInput): Promise<CalculateRewardPointsOutput> {
   return calculatePointsLogic(input);
 }

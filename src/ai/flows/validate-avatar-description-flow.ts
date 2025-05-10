@@ -10,7 +10,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
-export const ValidateAvatarDescriptionInputSchema = z.object({
+const ValidateAvatarDescriptionInputSchema = z.object({
   description: z.string().min(1).max(500).describe('The avatar description to validate.'),
 });
 export type ValidateAvatarDescriptionInput = z.infer<typeof ValidateAvatarDescriptionInputSchema>;
@@ -76,3 +76,4 @@ const validateAvatarDescriptionFlow = ai.defineFlow(
     return output;
   }
 );
+
