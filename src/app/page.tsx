@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -25,12 +24,13 @@ import type { Hormone } from "@/types/hormone";
 import type { Reward } from "@/types/reward";
 import RewardDisplay from "@/components/rewards/RewardDisplay";
 import { getAICoachNudge, useClientSideRandom } from "@/ai/coach";
+import { AICoachCard } from "@/components/coach/AICoachCard"; // Import the new AICoachCard
 import ContentDisplay from "@/components/content/ContentDisplay";
 import type { User as AppUser } from "@/types/user"; 
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle, ChevronDown } from "lucide-react";
+import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle, ChevronDown, MessageCircle } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow"; 
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
@@ -170,7 +170,9 @@ function MainAppInterface() {
         
         const newTasksPromises = defaultTaskData.map(async (taskData) => {
           if(!taskService || !appUser) return null; 
-          return taskService.createTask(taskData);
+          // Ensure rewardPoints are calculated if not provided
+          const points = taskData.rewardPoints ?? await taskService.calculateRewardPointsForTask(taskData.description, appUser.moodLogs?.[0]?.mood || 'Neutral', appUser.hormoneLevels);
+          return taskService.createTask({...taskData, rewardPoints: points});
         });
         const newTasks = (await Promise.all(newTasksPromises)).filter(Boolean) as AppTask[];
         setTasks(newTasks);
@@ -197,7 +199,7 @@ function MainAppInterface() {
     }
   };
 
-  const handleTaskCompletion = (taskId: string) => {
+  const handleTaskCompletion = async (taskId: string) => {
     if (!taskService || !appUser || !setAppUser) return; 
     const taskToComplete = tasks.find(t => t.id === taskId);
     if (!taskToComplete || taskToComplete.isCompleted) return;
@@ -206,14 +208,16 @@ function MainAppInterface() {
     if (updatedTask) {
       setTasks(prevTasks => prevTasks.map(t => t.id === taskId ? updatedTask : t));
       setNeuroPoints(prevPoints => prevPoints + (updatedTask.rewardPoints * (updatedTask.hasNeuroBoost ? 10 : 1)));
-      setAppUser(prevAppUser => {
-        if (!prevAppUser) return null;
-        return {
-          ...prevAppUser,
-          completedTasks: [...prevAppUser.completedTasks, updatedTask],
-          streak: taskService.user.streak 
-        };
+      
+      // Update AppUser state correctly
+      const currentAppUser = appUser; // Capture current state
+      const newCompletedTasks = [...(currentAppUser.completedTasks || []), updatedTask];
+      setAppUser({
+        ...currentAppUser,
+        completedTasks: newCompletedTasks,
+        streak: taskService.user.streak 
       });
+
 
       if (authUser && appUser.fcmToken && !appUser.id.startsWith('guest_')) { 
         sendNotificationToUser(authUser.uid, { 
@@ -234,12 +238,12 @@ function MainAppInterface() {
     if (rewardToClaim && !rewardToClaim.isUnlocked && neuroPoints >= rewardToClaim.pointsRequired) {
       setNeuroPoints(prev => prev - rewardToClaim.pointsRequired);
       setRewards(prevRewards => prevRewards.map(r => r.id === rewardId ? {...r, isUnlocked: true} : r));
-      setAppUser(prevAppUser => {
-        if (!prevAppUser) return null;
-        return {
-          ...prevAppUser,
-          claimedRewards: [...prevAppUser.claimedRewards, {...rewardToClaim, isUnlocked: true}]
-        };
+       // Update AppUser state correctly
+      const currentAppUser = appUser; // Capture current state
+      const newClaimedRewards = [...(currentAppUser.claimedRewards || []), {...rewardToClaim, isUnlocked: true}];
+      setAppUser({
+        ...currentAppUser,
+        claimedRewards: newClaimedRewards
       });
     }
   };
@@ -257,17 +261,15 @@ function MainAppInterface() {
         description: avatarDescription,
         previousAvatarPath: appUser.avatar?.imagePath 
       });
-      setAppUser(prevAppUser => {
-        if(!prevAppUser) return null;
-        return {
-          ...prevAppUser,
-          avatar: {
-            ...(prevAppUser.avatar || { id: generateId(), name: 'New Avatar', description: '' }), 
-            imageUrl: result.imageUrl,
-            imagePath: result.imagePath, 
-            description: `AI-generated: ${avatarDescription}`, 
-          }
-        };
+      const currentAppUser = appUser;
+      setAppUser({
+        ...currentAppUser,
+        avatar: {
+          ...(currentAppUser.avatar || { id: generateId(), name: 'New Avatar', description: '' }), 
+          imageUrl: result.imageUrl,
+          imagePath: result.imagePath, 
+          description: `AI-generated: ${avatarDescription}`, 
+        }
       });
       toast({ title: "Avatar Leveled Up! ✨🚀", description: "Your new AI-generated vibe is live! Looking fresh!" });
       setAvatarDescription(""); 
@@ -322,7 +324,7 @@ function MainAppInterface() {
   const incompleteTasks = useMemo(() => tasks.filter(t => !t.isCompleted), [tasks]);
   const randomIncompleteTask = useClientSideRandom(incompleteTasks);
   
-  const nudge = useMemo(() => {
+  const aiNudge = useMemo(() => {
     if (!isClient || !appUser) return "Loading your dose of awesome... ⏳";
     return getAICoachNudge(appUser, randomIncompleteTask ?? null);
   }, [appUser, randomIncompleteTask, isClient]);
@@ -431,9 +433,9 @@ function MainAppInterface() {
                     <p className="text-sm text-muted-foreground">Streak: <span className="font-bold text-amber-500">{appUser?.streak || 0} days</span> <Zap className="inline h-4 w-4 text-amber-400 fill-amber-400" /></p>
                     <p className="text-3xl font-extrabold text-primary drop-shadow-md mt-1">VibePoints: {neuroPoints} VP</p>
                 </div>
-                <div className="w-full text-center p-3 bg-primary/10 rounded-lg text-primary shadow-sm">
-                 {nudge || "Keep vibin' and thrivin'!"}
-                </div>
+                 {/* Integrate AICoachCard here */}
+                {appUser && <AICoachCard user={appUser} nudge={aiNudge} />}
+
               </CardContent>
               <CardFooter className="p-5 bg-background border-t border-border/30 flex justify-center">
                 {authUser && appUser?.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
@@ -515,7 +517,6 @@ function MainAppInterface() {
                       </CardContent>
                        <CardContent className="pt-2 text-sm text-muted-foreground">
                         <p>These levels are estimated based on your logged moods and activities. Click to learn more about how each hormone impacts your vibe!</p>
-                        {/* TODO: Add more detailed explanation or link to a modal/page */}
                       </CardContent>
                       <CardDescription className="px-6 pb-4 text-xs text-muted-foreground/70">
                         Peep what your brain's cookin' up, bestie. Levels adjust based on your mood logs & tasks.
@@ -659,7 +660,7 @@ function AppPageLogic() {
      return <MainAppInterface />;
   }
 
-  if (guestSessionActive && appUser.id.startsWith('guest_')) {
+  if (guestSessionActive && appUser?.id?.startsWith('guest_')) {
     console.log("AppPageLogic: Guest session is active. Rendering MainAppInterface for guest.");
     return <MainAppInterface />;
   }
