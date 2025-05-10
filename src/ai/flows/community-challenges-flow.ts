@@ -33,12 +33,19 @@ const GenerateCommunityChallengesOutputSchema = z.object({
 });
 export type GenerateCommunityChallengesOutput = z.infer<typeof GenerateCommunityChallengesOutputSchema>;
 
+const defaultChallenges: Challenge[] = [
+    { title: "Mindful Moment Share", description: "Take 5 minutes to just breathe. Share how it felt! 🧘‍♀️", category: "mindfulness" },
+    { title: "Quick Wins Wednesday", description: "What's one small thing you crushed today? Big or small, let's hear it! 🏆", category: "positivity" },
+];
+
 export async function generateCommunityChallenges(input: GenerateCommunityChallengesInput): Promise<GenerateCommunityChallengesOutput> {
   // Input validation could be done here too, though Genkit flow will also validate
   const parsedInput = GenerateCommunityChallengesInputSchema.safeParse(input);
   if (!parsedInput.success) {
     const errorMessage = parsedInput.error.issues.map(issue => issue.message).join(' ');
-    throw new Error(errorMessage || 'Invalid input for challenge generation.');
+    console.error('Invalid input for challenge generation:', errorMessage);
+    // throw new Error(errorMessage || 'Invalid input for challenge generation.');
+    return { challenges: defaultChallenges }; // Return default on validation error
   }
   return generateCommunityChallengesFlow(parsedInput.data);
 }
@@ -50,63 +57,65 @@ const generateCommunityChallengesFlow = ai.defineFlow(
     outputSchema: GenerateCommunityChallengesOutputSchema,
   },
   async (input) => {
-    const { output, finishReason } = await ai.generate({
-      model: 'googleai/gemini-2.0-flash',
-      prompt: `You are a super cool AI assistant, a total vibe curator for a GenZ wellness app.
-      Your job is to come up with fun community challenges that match the recent mood of our users.
-      Make the challenges engaging, positive, and something that encourages interaction or personal growth.
-      Think about what someone might enjoy or benefit from based on their recent vibes.
+    try {
+      const { output, finishReason } = await ai.generate({
+        model: 'googleai/gemini-2.0-flash',
+        prompt: `You are a super cool AI assistant, a total vibe curator for a GenZ wellness app.
+        Your job is to come up with fun community challenges that match the recent mood of our users.
+        Make the challenges engaging, positive, and something that encourages interaction or personal growth.
+        Think about what someone might enjoy or benefit from based on their recent vibes.
 
-      Recent User Moods (last few entries):
-      {{#each recentMoods}}
-      - On {{this.date}}, they felt {{this.mood}}.
-      {{/each}}
+        Recent User Moods (last few entries):
+        {{#each recentMoods}}
+        - On {{this.date}}, they felt {{this.mood}}.
+        {{/each}}
 
-      Based on these moods, suggest 1 to 3 community challenges.
-      Each challenge needs a 'title', 'description', and 'category' (mindfulness, activity, creativity, connection, positivity).
-      Keep the titles short and catchy. Descriptions should be 1-2 sentences, super engaging.
-      Let's make these challenges something people actually want to do!
+        Based on these moods, suggest 1 to 3 community challenges.
+        Each challenge needs a 'title', 'description', and 'category' (mindfulness, activity, creativity, connection, positivity).
+        Keep the titles short and catchy. Descriptions should be 1-2 sentences, super engaging.
+        Let's make these challenges something people actually want to do!
 
-      Example ideas (don't just copy these!):
-      - If moods are "Stressed" or "Anxious":
-        - Title: "Zen Zone Check-in"
-        - Description: "Share one small thing that brought you peace today. Let's find calm together! ✨"
-        - Category: mindfulness
-      - If moods are "Happy" or "Energetic":
-        - Title: "Good Vibes Only Photo Drop"
-        - Description: "Snap a pic of something that made you smile today and share it! Spread the joy! 📸"
-        - Category: positivity
-      - If moods are "Tired" or "Sad":
-        - Title: "Self-Care Sunday (Any Day!)"
-        - Description: "What's one act of self-care you're doing for yourself this week? Inspire the squad! 💖"
-        - Category: mindfulness
+        Example ideas (don't just copy these!):
+        - If moods are "Stressed" or "Anxious":
+          - Title: "Zen Zone Check-in"
+          - Description: "Share one small thing that brought you peace today. Let's find calm together! ✨"
+          - Category: mindfulness
+        - If moods are "Happy" or "Energetic":
+          - Title: "Good Vibes Only Photo Drop"
+          - Description: "Snap a pic of something that made you smile today and share it! Spread the joy! 📸"
+          - Category: positivity
+        - If moods are "Tired" or "Sad":
+          - Title: "Self-Care Sunday (Any Day!)"
+          - Description: "What's one act of self-care you're doing for yourself this week? Inspire the squad! 💖"
+          - Category: mindfulness
 
-      Provide the output as a JSON object matching the defined schema.
-      `,
-      input: input,
-      output: {
-        schema: GenerateCommunityChallengesOutputSchema,
-      },
-      config: {
-        temperature: 0.8, // A bit more creative for challenges
-      },
-    });
+        Provide the output as a JSON object matching the defined schema.
+        `,
+        input: input,
+        output: {
+          schema: GenerateCommunityChallengesOutputSchema,
+        },
+        config: {
+          temperature: 0.8, // A bit more creative for challenges
+        },
+      });
 
-    if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
-      console.warn(`Challenge generation finished due to ${finishReason}. Output may be incomplete or fallback needed.`);
+      if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
+        console.warn(`Challenge generation finished due to ${finishReason}. Output may be incomplete or fallback needed.`);
+      }
+
+      if (!output || !output.challenges || output.challenges.length === 0) {
+        console.error("AI failed to generate challenges or parse them. Output:", output);
+        // Fallback if AI fails or returns empty/malformed
+        return { challenges: defaultChallenges };
+      }
+
+      return output;
+    } catch (error: any) {
+      console.error("Error during AI challenge generation:", error.message);
+      // Fallback to default challenges on any exception
+      return { challenges: defaultChallenges };
     }
-
-    if (!output || !output.challenges || output.challenges.length === 0) {
-      console.error("AI failed to generate challenges or parse them. Output:", output);
-      // Fallback if AI fails or returns empty/malformed
-      return {
-        challenges: [
-          { title: "Mindful Moment Share", description: "Take 5 minutes to just breathe. Share how it felt! 🧘‍♀️", category: "mindfulness" },
-          { title: "Quick Wins Wednesday", description: "What's one small thing you crushed today? Big or small, let's hear it! 🏆", category: "positivity" },
-        ]
-      };
-    }
-
-    return output;
   }
 );
+

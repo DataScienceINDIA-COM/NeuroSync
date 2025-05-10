@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Moderates community post content using an AI model.
@@ -37,6 +36,11 @@ const ModerateCommunityPostOutputSchema = z.object({
 });
 export type ModerateCommunityPostOutput = z.infer<typeof ModerateCommunityPostOutputSchema>;
 
+const moderationErrorFallback: ModerateCommunityPostOutput = {
+  isAppropriate: false, // Default to not appropriate if moderation fails
+  reason: "Our AI moderator is taking a quick mental health break 😴. Your post will be reviewed manually or try again later!",
+  flaggedCategories: ["OTHER"],
+};
 
 class CommunityModerator extends Agent {
 
@@ -98,73 +102,74 @@ class CommunityModerator extends Agent {
       outputSchema: ModerateCommunityPostOutputSchema,
     },
     async (input) => {
-      const { output, finishReason } = await ai.generate({
-        model: 'googleai/gemini-2.0-flash', 
-        prompt: `${CommunityModeratorProfile.personaPrompt}
-      Analyze the following community post content. Determine if it's appropriate.
-      If it's inappropriate, provide a brief, user-friendly (GenZ style, consistent with your persona) reason and identify the category of violation (e.g., HATE_SPEECH, HARASSMENT, SEXUALLY_EXPLICIT, DANGEROUS_CONTENT, SPAM, OTHER).
-      
-      Post Content:
-      "${input.postContent}"
+      try {
+        const { output, finishReason } = await ai.generate({
+          model: 'googleai/gemini-2.0-flash', 
+          prompt: `${CommunityModeratorProfile.personaPrompt}
+        Analyze the following community post content. Determine if it's appropriate.
+        If it's inappropriate, provide a brief, user-friendly (GenZ style, consistent with your persona) reason and identify the category of violation (e.g., HATE_SPEECH, HARASSMENT, SEXUALLY_EXPLICIT, DANGEROUS_CONTENT, SPAM, OTHER).
+        
+        Post Content:
+        "${input.postContent}"
 
-      Consider the following guidelines for inappropriateness:\n- Hate speech: Content promoting discrimination or hatred based on race, ethnicity, religion, gender, sexual orientation, disability, or other characteristics.\n- Harassment or bullying: Content intended to insult, intimidate, or harm another individual or group.\n- Sexually explicit content: Inappropriate sexual content, including descriptions or images.\n- Promotion of dangerous activities or self-harm: Content that encourages harm to oneself or others, or illegal activities.\n- Misinformation: False or misleading information that could harm the user, community or the general public.\n- Privacy violation: Sharing personal information about oneself or others without their explicit consent.\n- Spam or irrelevant advertising: Unwanted advertisements, repetitive content, or off-topic posts.\n- Excessive negativity or personal attacks not constructive.
+        Consider the following guidelines for inappropriateness:\n- Hate speech: Content promoting discrimination or hatred based on race, ethnicity, religion, gender, sexual orientation, disability, or other characteristics.\n- Harassment or bullying: Content intended to insult, intimidate, or harm another individual or group.\n- Sexually explicit content: Inappropriate sexual content, including descriptions or images.\n- Promotion of dangerous activities or self-harm: Content that encourages harm to oneself or others, or illegal activities.\n- Misinformation: False or misleading information that could harm the user, community or the general public.\n- Privacy violation: Sharing personal information about oneself or others without their explicit consent.\n- Spam or irrelevant advertising: Unwanted advertisements, repetitive content, or off-topic posts.\n- Excessive negativity or personal attacks not constructive.
 
-      If the content is appropriate, set isAppropriate to true.
-      If it's inappropriate, set isAppropriate to false, provide a reason, and list flaggedCategories.
+        If the content is appropriate, set isAppropriate to true.
+        If it's inappropriate, set isAppropriate to false, provide a reason, and list flaggedCategories.
 
-      Example of inappropriate (adapt reason to your persona):
-      Post Content: "Everyone who likes pineapple on pizza is dumb lol, kys! Btw, my social security number is 1234-5678-9."
-      Output: { "isAppropriate": false, "reason": "Hey fam, let's keep it respectful and avoid sharing PII (like SSNs) for safety. Plus, no harmful suggestions, please! #KeepItSafe", "flaggedCategories": ["HARASSMENT", "DANGEROUS_CONTENT", "PRIVACY_VIOLATION"] }
-      
-      Example of appropriate:
-      Post Content: "Just crushed my workout! Feeling super energized today! What's everyone else up to?"
-      Output: { "isAppropriate": true }
+        Example of inappropriate (adapt reason to your persona):
+        Post Content: "Everyone who likes pineapple on pizza is dumb lol, kys! Btw, my social security number is 1234-5678-9."
+        Output: { "isAppropriate": false, "reason": "Hey fam, let's keep it respectful and avoid sharing PII (like SSNs) for safety. Plus, no harmful suggestions, please! #KeepItSafe", "flaggedCategories": ["HARASSMENT", "DANGEROUS_CONTENT", "PRIVACY_VIOLATION"] }
+        
+        Example of appropriate:
+        Post Content: "Just crushed my workout! Feeling super energized today! What's everyone else up to?"
+        Output: { "isAppropriate": true }
 
-      Example of inappropriate (adapt reason to your persona):
-      Post Content: "Vaccines cause autism. I know because my uncle's friend's cousin said so."
-      Output: { "isAppropriate": false, "reason": "Whoa there! Spreading info that isn't backed by science can be tricky. Let's make sure we're sharing reliable stuff to keep our community well-informed. #FactsOverFeels", "flaggedCategories": ["MISINFORMATION"] }\n\n
+        Example of inappropriate (adapt reason to your persona):
+        Post Content: "Vaccines cause autism. I know because my uncle's friend's cousin said so."
+        Output: { "isAppropriate": false, "reason": "Whoa there! Spreading info that isn't backed by science can be tricky. Let's make sure we're sharing reliable stuff to keep our community well-informed. #FactsOverFeels", "flaggedCategories": ["MISINFORMATION"] }\n\n
 
-      Provide the output strictly as a JSON object matching the defined schema.
-      `,
-        output: {
-          schema: ModerateCommunityPostOutputSchema,
-        },
-        config: {
-          temperature: 0.3, 
-          safetySettings: [ 
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_LOW_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_LOW_AND_ABOVE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
-          ],
-        },
-      });
-  
-      if (finishReason === 'blocked') {
-        return {
-          isAppropriate: false,
-          reason: "Oops, this post got caught in our safety net! Let's keep the vibes positive and safe, bestie.",
-          flaggedCategories: ["OTHER"],
-        };
-      }
-  
-      if (!output) {
-        console.error("AI moderation failed to produce an output for content:", input.postContent);
-        return {
-          isAppropriate: false,
-          reason: "Our AI moderator is taking a quick mental health break 😴. Please try rephrasing or post later!",
-          flaggedCategories: ["OTHER"],
-        };
-      }
-  
-      if (!output.isAppropriate && !output.reason) {
-        output.reason = "This post doesn't quite fit our community vibe. Let's keep it positive and respectful, fam!";
-        if (!output.flaggedCategories || output.flaggedCategories.length === 0) {
-          output.flaggedCategories = ["OTHER"];
+        Provide the output strictly as a JSON object matching the defined schema.
+        `,
+          output: {
+            schema: ModerateCommunityPostOutputSchema,
+          },
+          config: {
+            temperature: 0.3, 
+            safetySettings: [ 
+              { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_LOW_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_LOW_AND_ABOVE' },
+              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_LOW_AND_ABOVE' },
+            ],
+          },
+        });
+    
+        if (finishReason === 'blocked') {
+          return {
+            isAppropriate: false,
+            reason: "Oops, this post got caught in our safety net! Let's keep the vibes positive and safe, bestie.",
+            flaggedCategories: ["OTHER"],
+          };
         }
+    
+        if (!output) {
+          console.error("AI moderation failed to produce an output for content:", input.postContent);
+          return moderationErrorFallback;
+        }
+    
+        if (!output.isAppropriate && !output.reason) {
+          output.reason = "This post doesn't quite fit our community vibe. Let's keep it positive and respectful, fam!";
+          if (!output.flaggedCategories || output.flaggedCategories.length === 0) {
+            output.flaggedCategories = ["OTHER"];
+          }
+        }
+    
+        return output;
+      } catch (error: any) {
+        console.error("Error during AI moderation post flow:", error.message, "Input:", input.postContent);
+        return moderationErrorFallback;
       }
-  
-      return output;
     }
   );
 }
@@ -176,3 +181,4 @@ export async function moderateCommunityPost(input: ModerateCommunityPostInput): 
 }
 
 let message: Message | undefined = undefined;
+

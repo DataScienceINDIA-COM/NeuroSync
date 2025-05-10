@@ -38,8 +38,23 @@ const PersonalizedInsightsOutputSchema = z.object({
 });
 export type PersonalizedInsightsOutput = z.infer<typeof PersonalizedInsightsOutputSchema>;
 
+const defaultInsightsOutput: PersonalizedInsightsOutput = {
+    insights: [
+        {
+            insight: "Remember to stay hydrated, bestie! It's a total game changer for your vibe.",
+            tip: "Carry a water bottle with you and take sips throughout the day.",
+            relevanceScore: 0.6
+        }
+    ]
+};
+
 export async function getPersonalizedInsights(input: PersonalizedInsightsInput): Promise<PersonalizedInsightsOutput> {
-  return personalizedInsightsFlow(input);
+  const parsedInput = PersonalizedInsightsInputSchema.safeParse(input);
+  if (!parsedInput.success) {
+    console.error("Invalid input for personalized insights:", parsedInput.error.flatten().fieldErrors);
+    return defaultInsightsOutput; // Or throw, depending on how you want to handle in client
+  }
+  return personalizedInsightsFlow(parsedInput.data);
 }
 
 const RelevantSuggestionTool = ai.defineTool({
@@ -84,7 +99,17 @@ const personalizedInsightsFlow = ai.defineFlow(
     outputSchema: PersonalizedInsightsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
-    return output!;
+    try {
+      const {output} = await prompt(input);
+      if (!output || !output.insights || output.insights.length === 0) {
+        console.warn("Personalized insights generation resulted in no insights. Input:", input);
+        return defaultInsightsOutput;
+      }
+      return output;
+    } catch (error: any) {
+      console.error("Error generating personalized insights:", error.message, "Input:", input);
+      return defaultInsightsOutput; // Fallback to default insights on error
+    }
   }
 );
+

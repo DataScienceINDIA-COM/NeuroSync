@@ -49,47 +49,57 @@ const recommendedContentFlowInternal = ai.defineFlow(
       "How to Manage Adrenaline for Better Performance"
     ];
 
-    const { output, finishReason } = await ai.generate({
-      prompt: `You are a wellness content curator for a GenZ app.
-      Based on the user's recent mood logs, activities, and hormone levels, recommend 1 to 3 content titles.
-      The recommendations MUST be chosen ONLY from the following list of available titles:
-      ${availableContentTitles.map(title => `- "${title}"`).join('\n')}
+    try {
+      const { output, finishReason } = await ai.generate({
+        prompt: `You are a wellness content curator for a GenZ app.
+        Based on the user's recent mood logs, activities, and hormone levels, recommend 1 to 3 content titles.
+        The recommendations MUST be chosen ONLY from the following list of available titles:
+        ${availableContentTitles.map(title => `- "${title}"`).join('\n')}
 
-      User Data:
-      Mood Logs: ${JSON.stringify(input.moodLogs, null, 2)}
-      Hormone Levels: ${JSON.stringify(input.hormoneLevels, null, 2)}
-      Activities: ${input.activities ? JSON.stringify(input.activities, null, 2) : "None provided"}
+        User Data:
+        Mood Logs: ${JSON.stringify(input.moodLogs, null, 2)}
+        Hormone Levels: ${JSON.stringify(input.hormoneLevels, null, 2)}
+        Activities: ${input.activities ? JSON.stringify(input.activities, null, 2) : "None provided"}
 
-      Respond with a JSON object containing a key "recommendations" which is an array of 1 to 3 chosen titles.
-      Example: {"recommendations": ["Title A", "Title B"]}
-      Ensure the titles in the "recommendations" array are exact matches from the provided list.
-      If no specific recommendations fit, you can suggest general wellness content from the list like "10-Minute Guided Meditation for Stress Relief".
-      `,
-      model: 'googleai/gemini-2.0-flash',
-      output: {
-        schema: RecommendedContentOutputSchema,
-      },
-      config: {
-        temperature: 0.5,
+        Respond with a JSON object containing a key "recommendations" which is an array of 1 to 3 chosen titles.
+        Example: {"recommendations": ["Title A", "Title B"]}
+        Ensure the titles in the "recommendations" array are exact matches from the provided list.
+        If no specific recommendations fit, you can suggest general wellness content from the list like "10-Minute Guided Meditation for Stress Relief".
+        `,
+        model: 'googleai/gemini-2.0-flash',
+        output: {
+          schema: RecommendedContentOutputSchema,
+        },
+        config: {
+          temperature: 0.5,
+        }
+      });
+
+      if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
+          console.warn(`Content recommendation generation finished due to ${finishReason}. Output may be incomplete.`);
       }
-    });
-
-    if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
-        console.warn(`Content recommendation generation finished due to ${finishReason}. Output may be incomplete.`);
-    }
-    
-    if (!output || !output.recommendations || output.recommendations.length === 0) {
-      console.error("AI failed to generate or parse recommendations. Raw output:", output);
-      return { recommendations: [availableContentTitles[1]] }; 
-    }
-
-    const validRecommendations = output.recommendations.filter(rec => availableContentTitles.includes(rec));
-    if (validRecommendations.length === 0) {
-        console.warn("AI recommended titles not in the available list. Falling back. AI output:", output.recommendations);
+      
+      if (!output || !output.recommendations || output.recommendations.length === 0) {
+        console.error("AI failed to generate or parse recommendations. Raw output:", output);
+        // Fallback to a default recommendation if AI fails
         return { recommendations: [availableContentTitles[1]] }; 
-    }
+      }
 
-    return { recommendations: validRecommendations.slice(0,3) };
+      // Validate that AI recommended titles are from the available list
+      const validRecommendations = output.recommendations.filter(rec => availableContentTitles.includes(rec));
+      if (validRecommendations.length === 0) {
+          console.warn("AI recommended titles not in the available list. Falling back. AI output:", output.recommendations);
+          // Fallback if AI recommends invalid titles
+          return { recommendations: [availableContentTitles[1]] }; 
+      }
+
+      return { recommendations: validRecommendations.slice(0,3) }; // Return up to 3 valid recommendations
+
+    } catch (error: any) {
+        console.error("Error during AI content recommendation generation:", error.message);
+        // Fallback to a default recommendation on any exception
+        return { recommendations: [availableContentTitles[1]] };
+    }
   }
 );
 
@@ -99,9 +109,9 @@ export async function getRecommendedContent(input: RecommendedContentInput): Pro
   if (!parsedInput.success) {
     const errorMessage = parsedInput.error.issues.map(issue => issue.message).join('; ');
     console.error('Invalid input for content recommendation:', errorMessage, parsedInput.error.issues);
-    // Consider throwing a more user-friendly error or returning a default/error state
-    // For now, returning a default to prevent breaking the client if possible
+    // Fallback to a default recommendation if input validation fails
     return { recommendations: ["10-Minute Guided Meditation for Stress Relief"] };
   }
   return recommendedContentFlowInternal(parsedInput.data);
 }
+

@@ -31,37 +31,42 @@ export async function calculateRewardPoints(input: CalculateRewardPointsInput): 
       outputSchema: CalculateRewardPointsOutputSchema,
     },
     async (toolInput: CalculateRewardPointsInput): Promise<CalculateRewardPointsOutput> => {
-      const { text, finishReason } = await ai.generate({
-        prompt: `Given the following task details, user mood, and hormone levels, determine an appropriate reward point value between 10 and 30.
-        Consider the task's perceived difficulty, effort, and potential impact on well-being.
-        Task Description: "${toolInput.taskDescription}"
-        User Mood: ${toolInput.userMood}
-        Hormone Levels: Dopamine ${toolInput.hormoneLevels.dopamine}%, Adrenaline ${toolInput.hormoneLevels.adrenaline}%, Cortisol ${toolInput.hormoneLevels.cortisol}%, Serotonin ${toolInput.hormoneLevels.serotonin}%
-        
-        Respond with only a single number representing the reward points (e.g., 15, 25).`,
-        model: 'googleai/gemini-2.0-flash',
-        output: {
-          format: 'text' 
-        },
-        config: {
-          temperature: 0.5, // Slightly creative but still factual for point assignment
+      try {
+        const { text, finishReason } = await ai.generate({
+          prompt: `Given the following task details, user mood, and hormone levels, determine an appropriate reward point value between 10 and 30.
+          Consider the task's perceived difficulty, effort, and potential impact on well-being.
+          Task Description: "${toolInput.taskDescription}"
+          User Mood: ${toolInput.userMood}
+          Hormone Levels: Dopamine ${toolInput.hormoneLevels.dopamine}%, Adrenaline ${toolInput.hormoneLevels.adrenaline}%, Cortisol ${toolInput.hormoneLevels.cortisol}%, Serotonin ${toolInput.hormoneLevels.serotonin}%
+          
+          Respond with only a single number representing the reward points (e.g., 15, 25).`,
+          model: 'googleai/gemini-2.0-flash',
+          output: {
+            format: 'text' 
+          },
+          config: {
+            temperature: 0.5, // Slightly creative but still factual for point assignment
+          }
+        });
+
+        if (finishReason !== 'stop' && finishReason !== 'length' && finishReason !== 'blocked') {
+          console.warn(`Reward point generation finished due to ${finishReason}. Using default 20 points.`);
+          return 20; // Default if generation didn't complete as expected
         }
-      });
+        
+        const points = parseInt(text || '20', 10);
 
-      if (finishReason !== 'stop' && finishReason !== 'length') {
-        console.warn(`Reward point generation finished due to ${finishReason}. Using default.`);
-        return 20; // Default if generation didn't complete as expected
+        if (isNaN(points)) {
+          console.warn(`Could not parse reward points from AI response: "${text}". Using default 20 points.`);
+          return 20; // Default if parsing fails
+        }
+        
+        // Clamp the value between 10 and 30
+        return Math.min(30, Math.max(10, points));
+      } catch (error: any) {
+        console.error("Error during AI reward point calculation:", error.message, "Input:", toolInput);
+        return 20; // Default to 20 points on any exception
       }
-      
-      const points = parseInt(text || '20', 10);
-
-      if (isNaN(points)) {
-        console.warn(`Could not parse reward points from AI response: "${text}". Using default.`);
-        return 20; // Default if parsing fails
-      }
-      
-      // Clamp the value between 10 and 30
-      return Math.min(30, Math.max(10, points));
     }
   );
   
