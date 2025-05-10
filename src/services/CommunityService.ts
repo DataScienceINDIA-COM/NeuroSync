@@ -2,6 +2,7 @@
 import type { CommunityPost, Comment, CommunityPostStatus, ReportDetail } from "@/types/community";
 import { generateId } from "@/lib/utils";
 import { parseISO } from "date-fns";
+// Corrected import path
 import { moderateCommunityPost } from "@/ai/flows/moderate-community-post-flow";
 
 const COMMUNITY_POSTS_STORAGE_KEY = "communityPosts";

@@ -1,6 +1,7 @@
+
 'use server';
 
-import { adminMessaging, adminDb } from '@/lib/firebase-admin';
+import { adminMessaging, adminDb, adminInitError } from '@/lib/firebase-admin';
 import type { User } from '@/types/user';
 import admin from 'firebase-admin'; // Ensure admin is imported if FieldValue is used directly
 
@@ -11,6 +12,15 @@ interface NotificationPayload {
 }
 
 export async function sendNotificationToUser(userId: string, payload: NotificationPayload) {
+  if (adminInitError) {
+    console.error('Firebase Admin SDK not initialized. Cannot send notification.', adminInitError.message);
+    return { success: false, message: 'Firebase Admin SDK not initialized.' };
+  }
+  if (!adminMessaging || !adminDb) {
+    console.error('Firebase Admin Messaging or Firestore not available. Cannot send notification.');
+    return { success: false, message: 'Firebase Admin Messaging or Firestore not available.' };
+  }
+
   try {
     const userDoc = await adminDb.collection('users').doc(userId).get();
 
@@ -46,13 +56,22 @@ export async function sendNotificationToUser(userId: string, payload: Notificati
 }
 
 export async function storeUserFCMToken(userId: string, token: string): Promise<{success: boolean, message?: string}> {
+  if (adminInitError) {
+    console.error('Firebase Admin SDK not initialized. Cannot store FCM token.', adminInitError.message);
+    return { success: false, message: 'Firebase Admin SDK not initialized.' };
+  }
+  if (!adminDb) {
+    console.error('Firebase Admin Firestore not available. Cannot store FCM token.');
+    return { success: false, message: 'Firebase Admin Firestore not available.' };
+  }
+
   if (!userId || !token) {
     return { success: false, message: 'User ID and token are required.' };
   }
   try {
     await adminDb.collection('users').doc(userId).set({
       fcmToken: token,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(), // Correctly reference admin for FieldValue
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(), 
     }, { merge: true });
     console.log(`FCM token stored for user ${userId}`);
     return { success: true };
@@ -61,5 +80,3 @@ export async function storeUserFCMToken(userId: string, token: string): Promise<
     return { success: false, message: 'Failed to store FCM token.' };
   }
 }
-
-    
