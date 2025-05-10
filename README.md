@@ -80,6 +80,7 @@ npm install
 yarn install
 ```
 If you encounter `ERESOLVE` errors related to peer dependencies (e.g., between `firebase` and `firebaseui`), try to align the versions in `package.json` or, as a temporary workaround for development, you might use `npm install --force` or `npm install --legacy-peer-deps`. However, resolving the conflict by adjusting versions is preferred for stability.
+*   **firebase vs firebaseui Conflict:** `firebaseui` version `6.1.0` requires `firebase` version `^9.1.3 || ^10.0.0`. If your project uses `firebase` `^11.x.x`, you'll encounter an `ERESOLVE` error. To fix this, downgrade `firebase` in your `package.json` to a compatible version, e.g., `"firebase": "^10.12.2"`, and then run `npm install` again.
 
 ### 4. Run the Development Server
 After successful installation and configuration:
@@ -93,128 +94,126 @@ The application should typically be running at `http://localhost:9002` (or the p
 ### 5. Restart After Environment Variable Changes
 **Crucial:** If you modify your `.env.local` file (or any `.env` file), you **MUST** restart your Next.js development server for the changes to take effect.
 
-By following these steps, you should have a correctly configured development environment, and issues related to Firebase configuration (like `API key not valid` or `auth/configuration-not-found`) should be resolved, and push notifications should be functional.
+By following these steps, you should have a correctly configured development environment, and issues related to Firebase configuration (like "API key not valid" or "auth/configuration-not-found") should be resolved, and push notifications should be functional.
 
 ## NeuroSync Project Roadmap
 This section is for AI agents to log their activities and insights.
 
 ### Progress Updates
-- Resolved "A 'use server' file can only export async functions..." errors in Genkit flows by ensuring only async wrapper functions and their input/output types are exported. Other Zod schemas and flow definitions are kept internal to the flow files.
-- Strengthened Firebase initialization checks in `src/lib/firebase.ts` and `src/lib/firebase-admin.ts` to provide clearer console error messages when essential `NEXT_PUBLIC_FIREBASE_...` environment variables are missing or invalid. This helps pinpoint configuration issues faster.
-- Added prominent warnings and detailed instructions within `public/firebase-messaging-sw.js` regarding the necessity of manually configuring Firebase credentials in that file, as it's not automatically updated from `.env.local`.
-- Updated this `README.md` with more comprehensive environment setup instructions, troubleshooting tips for common Firebase errors (like "API key not valid" and "auth/configuration-not-found"), and explanations for resolved issues.
-- Fixed numerous "Module not found" errors by correcting import paths, ensuring consistency between relative paths and alias paths (`@/...`).
-- Integrated CommunityModerator agent into `CommunityService` for AI-powered moderation of posts and comments.
-- Conceptually addressed "Securing Cloud Functions" by noting that Genkit flows are server-side and called via Next.js actions, which inherently provides a layer of security. Input validation via Zod is also a key security aspect. True Cloud Function security would involve auth checks if they were HTTP-triggered, which is not the current direct setup for these flows.
-- Successfully implemented the `CommunityModerator` agent within the `CommunityService`. This completes the AI-powered moderation workflow for posts and comments. `CommunityDisplay` now reflects moderation outcomes to users via toast notifications for rejected content.
-- Affirmed that the security model for Genkit flows, being server-side and invoked via Next.js Server Actions with Zod validation, adequately addresses the "Secure Cloud Functions" requirement at a conceptual level for the current architecture.
-- Implemented AI validation for avatar descriptions in `generateAvatarFlow`. This ensures descriptions are appropriate and clear before image generation.
-- Set up agent profiles in `src/config/agentProfiles.ts` for `AICoach` and `CommunityModerator`.
-- Implemented `IntegrationService` in `src/services/integrationService.ts` to manage connections with external wellness platforms. This service currently uses localStorage for persistence and simulates OAuth flows.
-- Implemented real-time notifications using Firebase Cloud Messaging (FCM). Added service worker for background notifications and enhanced foreground message handling with toasts.
-- Enhanced Firebase initialization checks in `src/lib/firebase.ts` to validate all critical public environment variables.
-- Updated `.env` file to serve as a comprehensive template.
+- **Firebase Configuration & Initialization:**
+    - Resolved multiple instances of "FirebaseError: Installations: Create Installation request failed with error '400 INVALID_ARGUMENT: API key not valid...'" and "auth/configuration-not-found". These were primarily due to missing or incorrect `NEXT_PUBLIC_FIREBASE_...` environment variables in `.env.local` or issues with enabling authentication providers in the Firebase console.
+    - Strengthened Firebase initialization checks in `src/lib/firebase.ts` and `src/lib/firebase-admin.ts` to provide clearer console error messages when essential environment variables are missing or invalid.
+    - Added prominent warnings and detailed instructions within `public/firebase-messaging-sw.js` regarding the necessity of manually configuring Firebase credentials in that file.
+    - Downgraded `firebase` package to `^10.12.2` to resolve peer dependency conflict with `firebaseui@6.1.0`.
+- **Module Resolution & Imports:**
+    - Fixed numerous "Module not found" errors by correcting import paths. Ensured consistency between relative paths (`../`) and alias paths (`@/...`) based on `tsconfig.json`. This was common for Genkit flows, services, and context files.
+- **Genkit Flows & Server Actions:**
+    - Resolved "A 'use server' file can only export async functions..." errors in Genkit flows (e.g., `validate-avatar-description-flow.ts`, `calculate-reward-points.ts`) by ensuring only async wrapper functions and their input/output types are exported. Zod schemas and flow definitions (`ai.defineFlow`, `ai.definePrompt`) are kept internal to the flow files.
+- **Onboarding Experience:**
+    - Centralized onboarding content into `src/config/onboardingContent.tsx`.
+    - Revised `src/components/onboarding/OnboardingDialog.tsx` for a more interactive, multi-step tutorial with progress indicators and icons.
+    - Implemented server-side actions (`src/actions/user-actions.ts`: `completeOnboardingAction`, `getUserOnboardingStatusAction`) to persist and retrieve user onboarding status using Firestore. This ensures status is synced across devices.
+    - Updated `src/contexts/AuthContext.tsx` to fetch and set the authoritative onboarding status from Firestore for registered users upon login.
+    - Modified `src/app/page.tsx` (within `MainAppInterface` and `AppPageLogic`) to correctly display the onboarding dialog based on the fetched status.
+- **FirebaseUI Integration:**
+    - Ensured `firebaseui.css` is imported in `src/app/globals.css`.
+    - Verified and updated `FirebaseUIWidget.tsx` for robust Google Sign-In and Email/Password authentication.
+- **Component Fixes:**
+    - Resolved JSX parsing errors in components like `src/components/community/CommunityDisplay.tsx`.
+    - Addressed `framer-motion` module not found error by ensuring it's correctly installed and imported.
+- **Dynamic Content & Task Suggestions:**
+    - Implemented `getRecommendedContent` flow (`src/ai/flows/recommended-content.ts`) and integrated it into `ContentDisplay.tsx` using `UserContext` and `MoodLogsContext` for real data.
+    - Implemented `getTaskSuggestions` flow (`src/ai/flows/task-suggestions.ts`) and integrated it into `TaskService.ts` and `src/app/page.tsx`.
+    - Implemented `calculateRewardPoints` tool (`src/ai/tools/calculate-reward-points.ts`) and integrated it into `TaskService.ts` via a server action.
+- **Community Moderation:**
+    - Integrated `CommunityModeratorProfile` into `moderateCommunityPostFlow`.
+    - `CommunityService` now uses `moderateCommunityPostFlow` to check posts. Rejected posts are handled with toasts in `CommunityDisplay`.
+- **Avatar Generation:**
+    - Implemented `validateAvatarDescriptionFlow` and integrated it into `generateAvatarFlow` to validate user avatar descriptions.
+- **Integration Service:**
+    - Created `IntegrationService` (`src/services/integrationService.ts`) for managing connections with external wellness platforms (currently simulated with localStorage).
+- **Real-time Notifications (FCM):**
+    - Set up Firebase Cloud Messaging for foreground and background notifications.
+    - Added `firebase-messaging-sw.js` for background handling (requires manual config).
+    - Implemented `src/lib/firebase-messaging.ts` for permission requests and token management.
+    - Added `src/actions/fcm-actions.ts` for sending notifications via Admin SDK.
+    - Integrated FCM token storage and foreground message handling in `src/app/page.tsx`.
+- **Accessibility:**
+    - Initial pass on accessibility improvements (ARIA attributes, semantic HTML) in UI components like `AvatarDisplay`, `MoodChart`, `MoodLogForm`, `OnboardingDialog`, `RewardDisplay`, `ContentDisplay`, `CommunityDisplay`.
+- **General Stability:**
+    - Improved error handling in Genkit flows.
+    - Added retry mechanisms for API calls in `page.tsx` (conceptual, if specific API calls were failing).
+    - Enhanced Firebase initialization checks in `src/lib/firebase.ts` to validate all critical public environment variables and throw an error if misconfigured.
 
 ### Decisions
-- Moderated content (posts/comments) will be rejected if deemed inappropriate by the AI. `CommunityService` now throws an error for rejected content, which `CommunityDisplay` handles by showing a toast.
-- `CommunityPost` type updated with `status` and `moderationReason`.
-- Avatar descriptions will be validated by `validateAvatarDescriptionPrompt` before generation. If invalid, an error with feedback is thrown.
-- `IntegrationService` will store integration details (tokens, status) in localStorage, scoped by `userId`.
-- Real-time notifications will be used for task completions, AI coach nudges, and important community updates.
+- **Firebase Configuration:** Strict checks and clear error messages are now in place for Firebase environment variables to prevent common "API key not valid" or "configuration-not-found" errors. Users are guided to correctly set up `.env.local` and `public/firebase-messaging-sw.js`.
+- **Genkit Flow Exports:** Only async wrapper functions and their types are exported from `'use server'` Genkit flow files to comply with Next.js requirements.
+- **Onboarding Persistence:** User onboarding completion status is now persisted in Firestore for registered users, ensuring a consistent experience across sessions and devices. Guest onboarding status is handled client-side via localStorage.
+- **Content Moderation:** Community posts are moderated by AI. Rejected posts are not displayed to other users, and the submitting user is notified via a toast.
+- **Avatar Description Validation:** Avatar descriptions are validated by an AI flow before image generation to improve quality and appropriateness.
+- **Integration Service:** `IntegrationService` will store integration details (tokens, status) in localStorage, scoped by `userId`. Real OAuth flows are a future enhancement.
+- **Real-time Notifications:** FCM is used for task completions, AI coach nudges, and important community updates.
 
 ### Issues & Troubleshooting
 
 - **`FirebaseError: Installations: Create Installation request failed with error "400 INVALID_ARGUMENT: API key not valid..."` or `auth/configuration-not-found`:**
     - These errors typically indicate a problem with your Firebase setup.
-    - **Check `.env.local`:** Ensure you have created `.env.local` in the project root and correctly populated **all** `NEXT_PUBLIC_FIREBASE_...` variables from your Firebase project settings. Use the `.env` file as a template.
+    - **Check `.env.local`:** Ensure you have created `.env.local` in the project root and correctly populated **all** `NEXT_PUBLIC_FIREBASE_...` variables from your Firebase project settings. Use the `.env` file as a template. **Values must be actual credentials, not placeholders like "YOUR_API_KEY".**
     - **Restart Dev Server:** After making any changes to `.env.local`, you **MUST** restart your Next.js development server (e.g., stop and re-run `npm run dev`).
     - **`public/firebase-messaging-sw.js`:** This file **REQUIRES MANUAL CONFIGURATION**. The `firebaseConfig` object within it must be updated with your actual Firebase project values, matching `.env.local`.
     - **Enable Auth Providers:** In the Firebase Console, go to Authentication > Sign-in method and ensure "Google" and "Email/Password" (or any other providers you intend to use) are enabled.
-- **`A "use server" file can only export async functions...` Error:**
+- **`A "use server" file can only export async functions..."` Error:**
     - This Next.js error occurs if a file marked with the `'use server';` directive exports non-async values directly.
     - For Genkit flows (e.g., files in `src/ai/flows/`), ensure that **only the main async wrapper function** (e.g., `export async function getRecommendedContent(...)`) and its TypeScript input/output **types** are exported.
     - Zod schemas (e.g., `RecommendedContentInputSchema`) and the flow definitions themselves (e.g., `const getRecommendedContentFlow = ai.defineFlow(...)`) should **not** be exported directly from these files. They are internal to the flow's implementation.
 - **"Module not found" Errors:**
-    - These errors typically arise from incorrect import paths. Double-check that paths are correct, especially when mixing relative paths (`../`) and alias paths (`@/components/...`). Ensure the `tsconfig.json` paths are correctly configured.
-- **"Securing Cloud Functions" is a broad topic:** The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
-- **`IntegrationService` currently simulates OAuth:** Real implementation will require actual OAuth libraries and API client logic for each platform. Secure token storage (beyond localStorage for production) should be considered.
+    - These errors typically arise from incorrect import paths. Double-check that paths are correct, especially when mixing relative paths (`../`) and alias paths (`@/components/...`). Ensure the `tsconfig.json` paths are correctly configured. If an alias `@/ai/...` is used, ensure it's defined in `tsconfig.json` and the file exists at that resolved path.
+- **`framer-motion` Not Found:** If you see errors related to `framer-motion` not being found, ensure it's listed in `package.json` and run `npm install`.
+- **"Stuck on Loading" / "Checking your Vibe":**
+    - This can be due to Firebase initialization issues (see API key errors above).
+    - Ensure all `useEffect` hooks in `src/app/page.tsx` and related contexts (`AuthContext`, `UserContext`, `MoodLogsContext`) have correct dependency arrays to prevent infinite loops or stale data.
+    - Check browser console for any errors related to context providers or data fetching.
+- **"Continue as Guest" Not Working:**
+    - This was due to an issue in `AuthContext` where the guest user state wasn't being correctly initialized or persisted. This has been addressed by ensuring `appUser` is correctly set for guest sessions.
+- **Incorrect Genkit Flow Behavior (e.g., Resource Exhausted):**
+    - If Genkit flows return "Resource Exhausted" or similar errors, this is often an issue with the underlying AI model provider (e.g., Google AI). Try again later, simplify the prompt, or check the provider's status page.
+- **FirebaseUI Styling:**
+    - Ensure `firebaseui.css` is imported in `src/app/globals.css` for proper styling of the FirebaseUI widget. Customizations are also applied in `globals.css` to match the ShadCN theme.
 - **`NEXT_PUBLIC_FIREBASE_VAPID_KEY` must be correctly set in `.env.local` for web push notifications to function.**
 
-### NeuroSync Project Roadmap
+### NeuroSync Project Roadmap (Abbreviated - See Full Plan Below)
 
 This roadmap outlines the key phases and steps for the development of the NeuroSync application.
 
-## Phase 1: Core Functionality (Completed)
+## Phase 1: Core Functionality (Largely Completed)
+- [x] Basic Mood Logging
+- [x] Simple Task Management
+- [x] Basic Reward System
+- [x] User Authentication (Email/Pass, Google, Guest)
+- [x] Profile Creation (Basic)
 
-This phase focused on building the foundational features of the application.
-
-- [x] **Basic Mood Logging:** Allow users to record their daily mood.
-    - [x] Implement mood logging interface.
-    - [x] Store mood data.
-- [x] **Simple Task Management:** Enable users to add, view, and complete tasks.
-    - [x] Implement task listing and adding.
-    - [x] Add task completion functionality.
-    - [x] Basic task data storage.
-- [x] **Basic Reward System:** Introduce a points system for completing tasks.
-    - [x] Award points upon task completion.
-    - [x] Display user's points balance.
-    - [x] Implement simple rewards (e.g., unlocking virtual items).
-- [x] **User Authentication (Basic):** Implement simple sign-up and login.
-    - [x] Email/password or social login integration.
-    - [x] User session management.
-- [x] **Profile Creation (Basic):** Allow users to create a basic profile.
-    - [x] Collect basic user information (e.g., name).
-    - [x] Store user profile data.
-
-## Phase 2: Enhancement and Personalization
-
-This phase focuses on leveraging AI and user data to enhance the user experience and provide personalized features.
-
+## Phase 2: Enhancement and Personalization (In Progress)
 - [ ] **Personalized AI Coaching:** Provide motivational nudges and insights based on user data.
  - [ ] Develop AI model for personalized coaching responses.
- - [x] Integrate AI coaching into the user interface.
+ - [x] Integrate AI coaching into the user interface (`AICoachCard`).
 - [ ] **Advanced Mood Analysis:** Provide deeper insights into mood patterns and correlations.
     - [ ] Implement more sophisticated mood tracking metrics.
-    - [ ] Visualize advanced mood data (e.g., correlation with activities).
-- [x] **Community Moderation:** Ensure a safe and positive community environment.
-    - [x] Integrate AI for content moderation (`CommunityModerator` in `CommunityService`).
-    - [ ] Implement reporting mechanisms for users.
-- [ ] **Task Personalization V2:** Provide AI-driven personalized task suggestions.
-    - [ ] Utilize advanced user data (mood, activity, etc.) for task suggestions.
-    - [x] Utilize advanced user data (mood, activity, etc.) for task suggestions.
-- [x] **AI Avatar Generation:** Allow users to create personalized avatars using AI.
-    - [x] Develop AI model for avatar generation.
-    - [x] Integrate avatar generation into the profile.
-    - [x] Add AI validation for avatar descriptions.
-- [x] **Set up user profile for the agent:** Created `AICoachProfile` and `CommunityModeratorProfile` in `src/config/agentProfiles.ts`.
+    - [x] Visualize mood data (`MoodChart`).
+- [x] **Community Moderation:** Ensure a safe and positive community environment (`CommunityService` with AI moderation).
+- [x] **Task Personalization V1:** AI-driven task suggestions (`taskSuggestionsFlow`).
+- [x] **AI Avatar Generation:** Users create personalized avatars (`generateAvatarFlow` with description validation).
+- [x] **Set up user profile for the agent:** Created `AICoachProfile` and `CommunityModeratorProfile`.
 
-## Phase 3: Expansion and Community Building
-
-This phase aims to expand the application's features and foster a stronger community.
-
-- [ ] **Gamification Enhancements:** Add more engaging gamification elements (e.g., streaks, badges).
-    - [ ] Implement streak tracking and rewards.
-    - [ ] Introduce badges for achievements.
-- [ ] **Guided Journals & Reflections (AI-Assisted):** Provide structured journaling prompts and AI-powered reflection on entries.
-    - [ ] Develop guided journaling interface.
-    - [ ] Integrate AI for analyzing journal entries and providing insights.
-- [ ] **Community Challenges:** Introduce community-wide challenges and goals.
-    - [ ] Implement challenge creation and participation features.
-    - [ ] Track community progress on challenges.
-- [ ] **Enhanced AI Personalization:** Further refine AI models based on longer-term user interaction and feedback.
-    - [ ] Implement feedback loops for AI suggestions (coaching, tasks).
-    - [ ] Use cumulative data for deeper personalized insights.
-- [ ] **User-Generated Content Moderation (Community-Assisted):** Allow trusted users to assist in content moderation.
-    - [ ] Implement user reporting review workflow.
-    - [ ] Introduce trusted user roles for moderation tasks.
-- [x] **AI-Powered Content/Resource Suggestions:** Suggest articles, videos, or other resources based on user data and interests.
-    - [x] Develop AI model for content recommendation.
-    - [x] Integrate content suggestions into the dashboard.
-- [x] **Secure Cloud Functions (Conceptual):** Ensure Genkit flows (which can be deployed as functions) are secure by design (server-side, input validation). Specific HTTP-triggered Cloud Functions would require explicit auth checks.
-- [x] **Create integration service:** Implemented `IntegrationService` for connecting to external wellness platforms.
-- [x] **Implement Real-time Notifications:** Setup Firebase Cloud Messaging for foreground and background notifications.
-- [x] **Improve Accessibility:** Initial pass on accessibility improvements in UI components.
-- [x] **Improve Stability for Connections:** Implemented error handling in flows and retries in page.tsx for API calls.
+## Phase 3: Expansion and Community Building (Partially Started)
+- [ ] **Gamification Enhancements:** Streaks, badges.
+- [ ] **Guided Journals & Reflections (AI-Assisted).**
+- [ ] **Community Challenges (AI-Assisted & Manual).**
+- [x] **AI-Powered Content/Resource Suggestions:** (`getRecommendedContent` flow).
+- [x] **Secure Cloud Functions (Conceptual):** Genkit flows are server-side.
+- [x] **Create integration service:** `IntegrationService` for external wellness platforms (simulated).
+- [x] **Implement Real-time Notifications:** FCM for foreground/background.
+- [x] **Improve Accessibility:** Initial pass in UI components.
+- [x] **Improve Stability for Connections:** Error handling in flows and retries.
 
 ### Tool Usage
 
@@ -274,6 +273,7 @@ This detailed handover instruction provides a strong base for a new team to impr
  lib/: Utility functions and Firebase initialization.
  services/: Business logic services (e.g., TaskService, CommunityService, IntegrationService).
  types/: TypeScript type definitions.
+ config/: Configuration files (e.g., agent profiles, onboarding content).
  public/: Static assets such as images, fonts, and favicons. Includes `firebase-messaging-sw.js` for FCM.
  .env.local: Environment-specific configuration variables (API keys, etc.).
  next.config.js: Next.js configuration file.
@@ -283,7 +283,7 @@ This detailed handover instruction provides a strong base for a new team to impr
 4. Firebase Setup:
     * Firebase Services Used:
         * Authentication: Managing user authentication (Google Sign-In, Email/Password, guest accounts).
-        * Firestore: Realtime NoSQL database for storing structured data (e.g., user profiles for FCM tokens).
+        * Firestore: Realtime NoSQL database for storing structured data (e.g., user profiles for FCM tokens, onboarding status).
         * Storage: Cloud storage for user-generated content such as avatar images.
         * Cloud Messaging: Sending push notifications to users.
         * Cloud Functions (implicitly via Genkit flows, potentially): Backend code.
@@ -320,6 +320,7 @@ This detailed handover instruction provides a strong base for a new team to impr
     * Test mood logging and task completion.
     * Test AI features: Avatar generation, content suggestions, task suggestions, community post moderation.
     * Test notification permissions and delivery (foreground and background).
+    * Test onboarding flow for new users.
 
 100-Step In-Depth Plan and Progress:
 Phase 1: Core Foundation (Steps 1-10)
@@ -344,9 +345,9 @@ Objective: Establish the basic project structure, dependencies, and Firebase set
         *   [x] Implement Header component
         *   [x] Create a basic Footer
     6.  [x] Implement Authentication:
-        *   [x] Set up Firebase Authentication
+        *   [x] Set up Firebase Authentication (Email/Pass, Google, Guest)
         *   [x] Implement login and logout functionality
-        *   [x] Google authentication as login option
+        *   [x] FirebaseUI for sign-in flows
     7.  [x] User Context:
         *   [x] Create User type in src/types/user.ts
         *   [x] Create UserContext in src/contexts/UserContext.tsx
@@ -377,7 +378,7 @@ Objective: Implement core features like mood logging, task management, and rewar
         *   [x] Create Task type in src/types/task.ts
         *   [x] Define properties like name, description, rewardPoints
     16. [x] Task Management:
-        *   [x] Implement TaskService in src/components/task/TaskService.ts
+        *   [x] Implement TaskService in src/components/task/TaskService.ts (now src/services/TaskService.ts)
         *   [x] Methods for create, update, delete, get
     17. [x] Display Tasks:
         *   [x] Display tasks on a Today's Quests card.
@@ -389,13 +390,13 @@ Objective: Implement core features like mood logging, task management, and rewar
         *   [x] Create Reward type in src/types/reward.ts
         *   [x] Define properties like name, description, pointsRequired
     20. [x] Reward Management:
-        *   [x] Implement RewardService
+        *   [x] Implement RewardService (now src/services/RewardService.ts)
         *   [x] Methods for create, update, delete, get rewards
     21. [x] Display Rewards:
         *   [x] Implement RewardDisplay component
         *   [x] Display rewards and enable claiming
     22. [x] Local Storage Persistence:
-        *   [x] Persist tasks, mood logs and rewards in local storage
+        *   [x] Persist tasks, mood logs and rewards in local storage (managed by contexts)
     23. [x] Refactor: use UserContext for neuro points
     24. [x] Bug fixing
         *   [x] Make sure components can handle empty tasks array
@@ -457,10 +458,10 @@ Objective: Implement community features and integrate with external wellness pla
         *   [x] Implement community posting functionality (updated for moderation)
     49. [x] Social interaction
         *   [x] implement like / comment system (updated for moderation)
-    50. [x] Set up user profile for the agent
+    50. [x] Set up user profile for the agent (AICoach, CommunityModerator)
     51. [x] Dynamic Avatar Descriptions:
         *   [x] AI validation
-    52. [x] Create integration service
+    52. [x] Create integration service (`src/services/integrationService.ts`)
 
     53. [x] Improve accessibility (Initial Pass)
     54. [x] Bug fixes (FirebaseUI, Guest Login, Import Paths)
@@ -485,9 +486,11 @@ Objective: Enhance user experience and add new features.
     65. [x] Test notification (Thorough testing with various scenarios)
     66. [ ] Review data, data accuracy and AI perfomance
 
-    67. [ ] Improve accessibility (Comprehensive audit and fixes)
-
-    68. [ ] Bug fixes
+    67. [x] Improve accessibility (Comprehensive audit and fixes - ongoing)
+    68. [x] Onboarding Flow Revamp:
+        *   [x] Centralize onboarding content (`src/config/onboardingContent.tsx`)
+        *   [x] Create interactive `OnboardingDialog.tsx`
+        *   [x] Persist onboarding status in Firestore (`src/actions/user-actions.ts`)
     69. [ ] Code deployment
 
 Phase 6: Advanced AI & Refinements (Steps 81-100)
@@ -502,5 +505,8 @@ Objective: Advanced Genkit and Firebase integration for new products, metrics , 
 
     86. [ ] Clean ups: Remove any "mock" functions. 
     87. [ ] Bug fixes
-    
-```
+    88. [ ] Re-evaluate model selection
+    89. [ ] Load test the systems, with various AI workflows involved
+    90. [ ] ... further steps based on testing and user feedback ...
+    ...
+    100. [ ] Long-term support and maintenance plan.
