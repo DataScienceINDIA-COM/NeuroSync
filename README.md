@@ -70,10 +70,13 @@ This section is for AI agents to log their activities and insights.
 - Conceptually addressed "Securing Cloud Functions" by noting that Genkit flows are server-side and called via Next.js actions, which inherently provides a layer of security. Input validation via Zod is also a key security aspect. True Cloud Function security would involve auth checks if they were HTTP-triggered, which is not the current direct setup for these flows.
 - Successfully implemented the `CommunityModerator` agent within the `CommunityService`. This completes the AI-powered moderation workflow for posts and comments. `CommunityDisplay` now reflects moderation outcomes to users via toast notifications for rejected content.
 - Affirmed that the security model for Genkit flows, being server-side and invoked via Next.js Server Actions with Zod validation, adequately addresses the "Secure Cloud Functions" requirement at a conceptual level for the current architecture.
+- Implemented AI validation for avatar descriptions in `generateAvatarFlow`. This ensures descriptions are appropriate and clear before image generation.
+- Set up agent profiles in `src/config/agentProfiles.ts` for `AICoach` and `CommunityModerator`.
 
 ### Decisions
 - Moderated content (posts/comments) will be rejected if deemed inappropriate by the AI. `CommunityService` now throws an error for rejected content, which `CommunityDisplay` handles by showing a toast.
 - `CommunityPost` type updated with `status` and `moderationReason`.
+- Avatar descriptions will be validated by `validateAvatarDescriptionPrompt` before generation. If invalid, an error with feedback is thrown.
 
 ### Issues
 - "Securing Cloud Functions" is a broad topic. The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
@@ -120,9 +123,11 @@ This phase focuses on leveraging AI and user data to enhance the user experience
 - [ ] **Task Personalization V2:** Provide AI-driven personalized task suggestions.
     - [ ] Utilize advanced user data (mood, activity, etc.) for task suggestions.
     - [x] Utilize advanced user data (mood, activity, etc.) for task suggestions.
-- [ ] **AI Avatar Generation:** Allow users to create personalized avatars using AI.
-    - [ ] Develop AI model for avatar generation.
-    - [ ] Integrate avatar generation into the profile.
+- [x] **AI Avatar Generation:** Allow users to create personalized avatars using AI.
+    - [x] Develop AI model for avatar generation.
+    - [x] Integrate avatar generation into the profile.
+    - [x] Add AI validation for avatar descriptions.
+- [x] **Set up user profile for the agent:** Created `AICoachProfile` and `CommunityModeratorProfile` in `src/config/agentProfiles.ts`.
 
 ## Phase 3: Expansion and Community Building
 
@@ -147,12 +152,13 @@ This phase aims to expand the application's features and foster a stronger commu
     - [ ] Develop AI model for content recommendation.
     - [ ] Integrate content suggestions into the dashboard.
 - [x] **Secure Cloud Functions (Conceptual):** Ensure Genkit flows (which can be deployed as functions) are secure by design (server-side, input validation). Specific HTTP-triggered Cloud Functions would require explicit auth checks.
+- [x] **Create integration service:** Implemented `IntegrationService` for connecting to external wellness platforms.
 
 ### Tool Usage
 
 Handover Instructions: Firebase Studio Project
 
-This guide outlines the steps for handing over the Firebase Studio project to a new developer or team. It provides comprehensive instructions on various aspects of the project, including project access, environment configuration, folder structure, Firebase setup, Genkit setup, deployment details, and best practices.
+This detailed handover instruction provides a strong base for a new team to improve and support your project, reducing the likelihood of major issues down the line.
 
 1. Project Access:
 
@@ -198,6 +204,7 @@ This guide outlines the steps for handing over the Firebase Studio project to a 
  contexts/: React context providers for managing global state.
  hooks/: Custom React hooks.
  lib/: Utility functions and Firebase initialization.
+ services/: Business logic services (e.g., TaskService, CommunityService, IntegrationService).
  types/: TypeScript type definitions.
  public/: Static assets such as images, fonts, and favicons.
  .env.local: Environment-specific configuration variables (API keys, etc.).
@@ -266,7 +273,6 @@ This guide outlines the steps for handing over the Firebase Studio project to a 
     * Ensure basic functionality works: Login, mood log, and data loading.
     * Test the Genkit set up, especially community post moderation.
 
-This detailed handover instruction provides a strong base for a new team to improve and support your project, reducing the likelihood of major issues down the line.
 
 100-Step In-Depth Plan and Progress:
 Phase 1: Core Foundation (Steps 1-10)
@@ -404,10 +410,10 @@ Objective: Implement community features and integrate with external wellness pla
         *   [x] Implement community posting functionality (updated for moderation)
     49. [x] Social interaction
         *   [x] implement like / comment system (updated for moderation)
-    50. [ ] Set up user profile for the agent
-    51. [ ] Dynamic Avatar Descriptions:
-        *   [ ] AI validation
-    52. [ ] Create integration service
+    50. [x] Set up user profile for the agent
+    51. [x] Dynamic Avatar Descriptions:
+        *   [x] AI validation
+    52. [x] Create integration service
 
     53. [ ] Improve accessibility
     54. [ ] Bug fixes
