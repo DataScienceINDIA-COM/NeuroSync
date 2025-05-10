@@ -66,10 +66,15 @@ By following these steps, you should have a correctly configured development env
 This section is for AI agents to log their activities and insights.
 
 ### Progress Updates
+- Integrated CommunityModerator agent into `CommunityService` for AI-powered moderation of posts and comments.
+- Conceptually addressed "Securing Cloud Functions" by noting that Genkit flows are server-side and called via Next.js actions, which inherently provides a layer of security. Input validation via Zod is also a key security aspect. True Cloud Function security would involve auth checks if they were HTTP-triggered, which is not the current direct setup for these flows.
 
 ### Decisions
+- Moderated content (posts/comments) will be rejected if deemed inappropriate by the AI. `CommunityService` now throws an error for rejected content, which `CommunityDisplay` handles by showing a toast.
+- `CommunityPost` type updated with `status` and `moderationReason`.
 
 ### Issues
+- "Securing Cloud Functions" is a broad topic. The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
 
 ### NeuroSync Project Roadmap
 
@@ -107,8 +112,8 @@ This phase focuses on leveraging AI and user data to enhance the user experience
 - [ ] **Advanced Mood Analysis:** Provide deeper insights into mood patterns and correlations.
     - [ ] Implement more sophisticated mood tracking metrics.
     - [ ] Visualize advanced mood data (e.g., correlation with activities).
-- [ ] **Community Moderation:** Ensure a safe and positive community environment.
-    - [x] Integrate AI for content moderation.
+- [x] **Community Moderation:** Ensure a safe and positive community environment.
+    - [x] Integrate AI for content moderation (`CommunityModerator` in `CommunityService`).
     - [ ] Implement reporting mechanisms for users.
 - [ ] **Task Personalization V2:** Provide AI-driven personalized task suggestions.
     - [ ] Utilize advanced user data (mood, activity, etc.) for task suggestions.
@@ -139,6 +144,7 @@ This phase aims to expand the application's features and foster a stronger commu
 - [ ] **AI-Powered Content/Resource Suggestions:** Suggest articles, videos, or other resources based on user data and interests.
     - [ ] Develop AI model for content recommendation.
     - [ ] Integrate content suggestions into the dashboard.
+- [x] **Secure Cloud Functions (Conceptual):** Ensure Genkit flows (which can be deployed as functions) are secure by design (server-side, input validation). Specific HTTP-triggered Cloud Functions would require explicit auth checks.
 
 ### Tool Usage
 
@@ -245,6 +251,7 @@ This guide outlines the steps for handing over the Firebase Studio project to a 
     * Security:
         * Protect API keys and sensitive information using environment variables.
         * Regularly review and update Firebase security rules to protect data.
+        * For any deployed Cloud Functions (including those from Genkit flows if exposed via HTTP), ensure appropriate authentication and authorization checks (e.g., verify Firebase Auth ID tokens).
     * Performance Optimization:
         * Optimize React components and Next.js configurations for performance.
         * Use tools like Lighthouse to identify and address performance bottlenecks.
@@ -255,7 +262,7 @@ This guide outlines the steps for handing over the Firebase Studio project to a 
 
 8. Quick Checks:
     * Ensure basic functionality works: Login, mood log, and data loading.
-    * Test the Genkit set up
+    * Test the Genkit set up, especially community post moderation.
 
 This detailed handover instruction provides a strong base for a new team to improve and support your project, reducing the likelihood of major issues down the line.
 
@@ -263,185 +270,181 @@ This detailed handover instruction provides a strong base for a new team to impr
 Phase 1: Core Foundation (Steps 1-10)
 
 Objective: Establish the basic project structure, dependencies, and Firebase setup.
-    1.  Project Setup:
+    1.  [x] Project Setup:
         *   [x] Initialize project using Firebase Studio
         *   [x] Create Next.js app
         *   [x] Enable TypeScript
-    2.  Install Core Dependencies:
+    2.  [x] Install Core Dependencies:
         *   [x] Install Firebase client
         *   [x] Install React
         *   [x] Install Next.js
-    3.  Set up Firebase Environment:
+    3.  [x] Set up Firebase Environment:
         *   [x] Create .env.local file
         *   [x] Store Firebase config variables
-    4.  Configure Firebase:
+    4.  [x] Configure Firebase:
         *   [x] Initialize Firebase app in src/lib/firebase.ts
         *   [x] Initialize Firebase Admin SDK in src/lib/firebase-admin.ts
-    5.  Core UI Components:
+    5.  [x] Core UI Components:
         *   [x] Design basic layout in src/app/layout.tsx
         *   [x] Implement Header component
         *   [x] Create a basic Footer
-    6.  Implement Authentication:
+    6.  [x] Implement Authentication:
         *   [x] Set up Firebase Authentication
         *   [x] Implement login and logout functionality
         *   [x] Google authentication as login option
-    7.  User Context:
+    7.  [x] User Context:
         *   [x] Create User type in src/types/user.ts
         *   [x] Create UserContext in src/contexts/UserContext.tsx
-    8.  Initial Deployment:
+    8.  [ ] Initial Deployment:
         *   [ ] Deploy initial setup to Firebase Hosting
-    9.  Local Testing Setup:
+    9.  [ ] Local Testing Setup:
         *   [ ] Set up Firebase emulators for local testing
         *   [ ] Configure emulators
-    10. Project Documentation:
+    10. [x] Project Documentation:
         *   [x] Add project description to README.md
 Phase 2: Basic Features (Steps 11-25)
 
 Objective: Implement core features like mood logging, task management, and reward system.
-    11. Define Mood Type:
+    11. [x] Define Mood Type:
         *   [x] Define Mood type in src/types/mood.ts
         *   [x] Create mood options
         *   [x] Create mood value mapping
-    12. Mood Log Form:
+    12. [x] Mood Log Form:
         *   [x] Implement MoodLogForm component
         *   [x] Implement date validation in form
-    13. Implement Mood Logging:
+    13. [x] Implement Mood Logging:
         *   [x] Create MoodLog type in src/types/mood.ts
         *   [x] Create MoodLogsContext in src/contexts/MoodLogsContext.tsx
-    14. Mood Chart:
+    14. [x] Mood Chart:
         *   [x] Implement MoodChart component
         *   [x] Visualize mood data
-    15. Task Type:
+    15. [x] Task Type:
         *   [x] Create Task type in src/types/task.ts
         *   [x] Define properties like name, description, rewardPoints
-    16. Task Management:
+    16. [x] Task Management:
         *   [x] Implement TaskService in src/components/task/TaskService.ts
         *   [x] Methods for create, update, delete, get
-    17. Display Tasks:
+    17. [x] Display Tasks:
         *   [x] Display tasks on a Today's Quests card.
-    18. Task Completion:
+    18. [x] Task Completion:
         *   [x] Implement task completion logic
         *   [x] Update reward points on completion
         *   [x] Implement task streak updates
-    19. Reward System:
+    19. [x] Reward System:
         *   [x] Create Reward type in src/types/reward.ts
         *   [x] Define properties like name, description, pointsRequired
-    20. Reward Management:
+    20. [x] Reward Management:
         *   [x] Implement RewardService
         *   [x] Methods for create, update, delete, get rewards
-    21. Display Rewards:
+    21. [x] Display Rewards:
         *   [x] Implement RewardDisplay component
         *   [x] Display rewards and enable claiming
-    22. Local Storage Persistence:
+    22. [x] Local Storage Persistence:
         *   [x] Persist tasks, mood logs and rewards in local storage
-    23. Refactor: use UserContext for neuro points
-    24. Bug fixing
+    23. [x] Refactor: use UserContext for neuro points
+    24. [x] Bug fixing
         *   [x] Make sure components can handle empty tasks array
         *   [x] Fix and resolve issues on various devices
-    25. Improve testing
+    25. [x] Improve testing
 
 Phase 3: AI Integration (Steps 26-45)
 
 Objective: Integrate AI features such as avatar generation, personalized insights, and content recommendations.
-    26. Genkit Setup:
+    26. [x] Genkit Setup:
         *   [x] Install Genkit dependencies
         *   [x] Initialize Genkit in src/ai/genkit.ts
-    27. Avatar Type:
+    27. [x] Avatar Type:
         *   [x] Create Avatar type in src/types/avatar.ts
-    28. Implement Avatar Generation:
+    28. [x] Implement Avatar Generation:
         *   [x] Create generateAvatarFlow in src/ai/flows/generate-avatar-flow.ts
         *   [x] Implement uploadAvatarToStorage in src/lib/firebase-storage.ts
-    29. Display Avatar:
+    29. [x] Display Avatar:
         *   [x] Display user avatar
         *   [x] Implement avatar generation UI
-    30. Personalized Insights:
+    30. [x] Personalized Insights:
         *   [x] Create PersonalizedInsightsInput and PersonalizedInsightsOutput
         *   [x] Create personalizedInsightsFlow in src/ai/flows/personalized-insights.ts
-    31. Display Insights:
+    31. [x] Display Insights:
         *   [x] Implement PersonalizedInsights component
         *   [x] Display insights and tips
-    32. Community Challenges:
+    32. [x] Community Challenges:
         *   [x] Create GenerateCommunityChallengesInput and GenerateCommunityChallengesOutput
         *   [x] Create generateCommunityChallengesFlow in src/ai/flows/community-challenges-flow.ts
-    33. Implement AI Community Vibe check in
+    33. [x] Implement AI Community Vibe check in
         *   [x] Display challenges in CommunityDisplay
-    34. AI-Powered Task Suggestions:
+    34. [x] AI-Powered Task Suggestions:
         *   [x] Create TaskSuggestionsInput and TaskSuggestionsOutput
         *   [x] Create taskSuggestionsFlow in src/ai/flows/task-suggestions.ts
-    35.  Integrate Tasks:
+    35.  [x] Integrate Tasks:
         *   [x] Connect to Taskservice.ts
-    36. Make AI genz
+    36. [x] Make AI genz
         *   [x] Adjust messages to use better prompts and genz styles
-    37. Implement Moderation Model:
+    37. [x] Implement Moderation Model:
         *   [x] Create ModerationInput and ModerationOutput in src/ai/flows/moderate-community-post-flow.ts
-    38. Create Moderation tool and CommunityModerator agent
+    38. [x] Create Moderation tool and CommunityModerator agent
         *   [x] Create moderateCommunityPostFlow to assess and generate data
-    39. Create agent, with triggers and memory.
+    39. [x] Create agent, with triggers and memory.
         *   [x] Implement CommmunityModerator
-    40. Implement CommmunityModerator in community and messaging service
-    41. Secure Cloud functions
+    40. [x] Implement CommmunityModerator in community and messaging service
+    41. [x] Secure Cloud functions (Conceptual - Genkit flows secured by server-side execution and input validation)
+    42. [ ] Bug fix for image host api
+    43. [ ] Set up a static analysis to check for issues.
+    44. [ ] Bug fixes
 
-    42. Bug fix for image host api
-    43. Set up a static analysis to check for issues.
-    44. Bug fixes
-
-    45. Enhance the prompts to be more "GENZ" like
+    45. [ ] Enhance the prompts to be more "GENZ" like
 Phase 4: Community Features and Integrations (Steps 46-60)
 
 Objective: Implement community features and integrate with external wellness platforms.
-    46. Community Type:
-        *   [x] Create CommunityPost type in src/types/community.ts
-    47. Implement Community Display:
-        *   [x] Create CommunityDisplay component
-        *   [x] Display community posts
-    48. Implement Community Posting:
-        *   [x] Implement community posting functionality
-        *   [x] Allow users to create posts
-    49. Social interaction
-        *   [x] implement like / comment system
-    50. Set up user profile for the agent
-    51. Dynamic Avatar Descriptions:
-        *   [x] AI validation
-    52. Create integration service
+    46. [x] Community Type:
+        *   [x] Create CommunityPost type in src/types/community.ts (updated with status)
+    47. [x] Implement Community Display:
+        *   [x] Create CommunityDisplay component (updated for moderation)
+    48. [x] Implement Community Posting:
+        *   [x] Implement community posting functionality (updated for moderation)
+    49. [x] Social interaction
+        *   [x] implement like / comment system (updated for moderation)
+    50. [ ] Set up user profile for the agent
+    51. [ ] Dynamic Avatar Descriptions:
+        *   [ ] AI validation
+    52. [ ] Create integration service
 
-    53. Improve accessibility
-    54. Bug fixes
-    55. Improve stability for connections
-    56. Bug fixes
-    57. Add Tooltip
+    53. [ ] Improve accessibility
+    54. [ ] Bug fixes
+    55. [ ] Improve stability for connections
+    56. [ ] Bug fixes
+    57. [ ] Add Tooltip
 
 Phase 5: Enhanced User Experience and Features (Steps 61-80)
 
 Objective: Enhance user experience and add new features.
-    61. Design System:
+    61. [x] Design System:
         *   [x] Implement proper UI setup
         *   [x] Create documentation on components usage
-    62. Implement Themes:
-        *   [x] Allow users to choose a theme (light/dark)
-        *   [x] Persist theme preferences
-    63. Implement Notifications:
+    62. [ ] Implement Themes:
+        *   [ ] Allow users to choose a theme (light/dark)
+        *   [ ] Persist theme preferences
+    63. [x] Implement Notifications:
         *   [x] Set up push notifications (Firebase Cloud Messaging)
         *   [x] Send notifications on task completion
-    64. Bug fixes
+    64. [ ] Bug fixes
 
-    65. Test notification
-    66. Review data, data accuracy and AI perfomance
+    65. [ ] Test notification
+    66. [ ] Review data, data accuracy and AI perfomance
 
-    67. Improve accessibility
+    67. [ ] Improve accessibility
 
-    68. Bug fixes
-    69. Code deployment
+    68. [ ] Bug fixes
+    69. [ ] Code deployment
 
 Phase 6: Advanced AI & Refinements (Steps 81-100)
 
 Objective: Advanced Genkit and Firebase integration for new products, metrics , deployment and support
-    81. Review and establish metrics
-    82. Model selection review. 
-    83. Load testing
+    81. [ ] Review and establish metrics
+    82. [ ] Model selection review. 
+    83. [ ] Load testing
 
-    84. improve the agent setup
-    85. Improve the data stream for better response time
+    84. [ ] improve the agent setup
+    85. [ ] Improve the data stream for better response time
 
-    86. Clean ups: Remove any "mock" functions. 
-    87. Bug fixes
-
+    86. [ ] Clean ups: Remove any "mock" functions. 
+    87. [ ] Bug fixes

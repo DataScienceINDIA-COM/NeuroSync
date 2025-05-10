@@ -1,7 +1,8 @@
 
-import type { CommunityPost, Comment } from "@/types/community";
+import type { CommunityPost, Comment, CommunityPostStatus } from "@/types/community";
 import { generateId } from "@/lib/utils";
 import { parseISO } from "date-fns";
+import { moderateCommunityPost } from "@/ai/flows/moderate-community-post-flow";
 
 const COMMUNITY_POSTS_STORAGE_KEY = "communityPosts";
 
@@ -29,15 +30,16 @@ class CommunityService {
             shareCount: post.shareCount ?? 0,
             edited: post.edited ?? false,
             deleted: post.deleted ?? false,
+            status: post.status ?? 'approved', // Default to approved for older posts
           })).sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
         } catch (error) {
           console.error("Failed to parse community posts from localStorage", error);
-          this.posts = this.getDefaultPosts(); // Fallback to default if parsing fails
+          this.posts = this.getDefaultPosts(); 
         }
       } else {
         this.posts = this.getDefaultPosts();
       }
-      this.savePosts(); // Save defaults if no posts were stored or if parsing failed and defaults were loaded
+      this.savePosts(); 
     }
   }
 
@@ -50,7 +52,7 @@ class CommunityService {
         userAvatar: `https://picsum.photos/seed/${generateId()}/40/40`,
         message:
           "Just finished a 20-minute meditation session. Feeling so calm and centered! Highly recommend it for anyone feeling stressed. ✨",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), 
         likes: 12,
         comments: [],
         shares: 2,
@@ -59,6 +61,7 @@ class CommunityService {
         shareCount: 2,
         edited: false,
         deleted: false,
+        status: 'approved',
       },
       {
         id: generateId(),
@@ -67,7 +70,7 @@ class CommunityService {
         userAvatar: `https://picsum.photos/seed/${generateId()}/40/40`,
         message:
           "Hit my 10,000 steps goal today and also managed a quick yoga flow. Physical activity really does wonders for my mood. What's your favorite way to stay active?",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 hours ago
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), 
         likes: 25,
         comments: [],
         shares: 5,
@@ -76,6 +79,7 @@ class CommunityService {
         shareCount: 5,
         edited: false,
         deleted: false,
+        status: 'approved',
       },
       {
         id: generateId(),
@@ -83,7 +87,7 @@ class CommunityService {
         userName: "GratitudeSeeker",
         userAvatar: `https://picsum.photos/seed/${generateId()}/40/40`,
         message: "Feeling grateful for small joys today: a warm cup of tea, sunshine, and connecting with a friend. What are you grateful for?",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), 
         likes: 30,
         comments: [],
         shares: 7,
@@ -92,6 +96,7 @@ class CommunityService {
         shareCount: 7,
         edited: false,
         deleted: false,
+        status: 'approved',
       }
     ].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
   }
@@ -102,11 +107,30 @@ class CommunityService {
     }
   }
 
-  public getPosts(): CommunityPost[] {
-    return [...this.posts].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
+  public getPosts(showAllForAdmin = false): CommunityPost[] {
+    // Filter out rejected posts for regular users
+    const visiblePosts = this.posts.filter(post => showAllForAdmin || post.status === 'approved' || post.status === 'pending_moderation');
+    return [...visiblePosts].sort((a, b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
   }
 
-  public createPost(postData: Omit<CommunityPost, 'likes' | 'comments' | 'shares' | 'likedBy' | 'commentCount' | 'shareCount' | 'edited' | 'deleted'>): CommunityPost {
+  public async createPost(postData: Omit<CommunityPost, 'likes' | 'comments' | 'shares' | 'likedBy' | 'commentCount' | 'shareCount' | 'edited' | 'deleted' | 'status' | 'moderationReason'>): Promise<CommunityPost> {
+    const moderationResult = await moderateCommunityPost({ postContent: postData.message });
+
+    let postStatus: CommunityPostStatus = 'approved';
+    let moderationReason: string | undefined = undefined;
+
+    if (!moderationResult.isAppropriate) {
+      postStatus = 'rejected';
+      moderationReason = moderationResult.reason || "Content deemed inappropriate by AI moderator.";
+      // Optionally, you could throw an error here to prevent saving rejected posts
+      // or handle it by not adding to the main list / adding to a separate list for review.
+      // For this implementation, we'll mark it as rejected and include the reason.
+      // If the app should prevent saving rejected posts, throw an error here.
+      console.warn(`Post by ${postData.userName} rejected: ${moderationReason}`);
+      // Throwing an error if you want to prevent rejected posts from being added at all
+      throw new Error(`Post rejected: ${moderationReason}`);
+    }
+    
     const newPost: CommunityPost = {
       ...postData,
       likes: 0,
@@ -117,8 +141,11 @@ class CommunityService {
       shareCount: 0,
       edited: false,
       deleted: false,
+      status: postStatus,
+      moderationReason: moderationReason,
     };
-    this.posts.unshift(newPost); // Add to the beginning
+
+    this.posts.unshift(newPost); 
     this.posts.sort((a,b) => parseISO(b.timestamp).getTime() - parseISO(a.timestamp).getTime());
     this.savePosts();
     return newPost;
@@ -131,9 +158,20 @@ class CommunityService {
   public async updatePost(id: string, updatedMessage: string, userId: string): Promise<CommunityPost | null> {
     const postIndex = this.posts.findIndex((post) => post.id === id);
     if (postIndex > -1 && this.posts[postIndex].userId === userId) {
+      const moderationResult = await moderateCommunityPost({ postContent: updatedMessage });
+      if (!moderationResult.isAppropriate) {
+        this.posts[postIndex].status = 'rejected';
+        this.posts[postIndex].moderationReason = moderationResult.reason || "Edited content deemed inappropriate.";
+        this.savePosts();
+        // Depending on UX, you might throw an error or just update status.
+        throw new Error(`Update rejected: ${this.posts[postIndex].moderationReason}`);
+      }
+
       this.posts[postIndex].message = updatedMessage;
-      this.posts[postIndex].timestamp = new Date().toISOString(); // Update timestamp on edit
+      this.posts[postIndex].timestamp = new Date().toISOString(); 
       this.posts[postIndex].edited = true;
+      this.posts[postIndex].status = 'approved'; // Re-approve after edit if moderation passes
+      this.posts[postIndex].moderationReason = undefined;
       this.savePosts();
       return this.posts[postIndex];
     }
@@ -152,7 +190,7 @@ class CommunityService {
 
   public async likePost(postId: string, userId: string): Promise<CommunityPost | null> {
     const post = this.getPostById(postId);
-    if (post) {
+    if (post && post.status === 'approved') { // Only allow liking approved posts
       const alreadyLiked = post.likedBy.includes(userId);
       if (alreadyLiked) {
         post.likes = Math.max(0, post.likes - 1);
@@ -167,10 +205,24 @@ class CommunityService {
     return null;
   }
 
-  public async addCommentToPost(postId: string, comment: Comment): Promise<CommunityPost | null> {
+  public async addCommentToPost(postId: string, commentData: Omit<Comment, 'id'>): Promise<CommunityPost | null> {
     const post = this.getPostById(postId);
-    if (post) {
-      post.comments.push(comment);
+    if (post && post.status === 'approved') { // Only allow commenting on approved posts
+      const moderationResult = await moderateCommunityPost({ postContent: commentData.comment });
+      if (!moderationResult.isAppropriate) {
+         // Decide how to handle inappropriate comments:
+         // 1. Don't add it and throw an error/return null.
+         // 2. Add it with a 'rejected' status (if Comment type supports it).
+         // For simplicity, we'll prevent adding it.
+        console.warn(`Comment by ${commentData.userName} on post ${postId} rejected: ${moderationResult.reason}`);
+        throw new Error(`Comment rejected: ${moderationResult.reason || "Comment deemed inappropriate."}`);
+      }
+
+      const newComment: Comment = {
+        id: generateId(),
+        ...commentData,
+      };
+      post.comments.push(newComment);
       post.commentCount = post.comments.length;
       this.savePosts();
       return post;
@@ -180,9 +232,9 @@ class CommunityService {
 
   public async sharePost(id: string): Promise<CommunityPost | null> {
     const post = this.getPostById(id);
-    if (post) {
+    if (post && post.status === 'approved') { // Only allow sharing approved posts
         post.shares = (post.shares ?? 0) + 1;
-        post.shareCount = post.shares; // Assuming shareCount is just total shares
+        post.shareCount = post.shares; 
         this.savePosts();
         console.log(`Simulated share for post: ${post.message}`);
         return post;

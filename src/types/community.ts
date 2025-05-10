@@ -8,6 +8,8 @@ export type Comment = {
   timestamp: string; // ISO string date
 };
 
+export type CommunityPostStatus = 'pending_moderation' | 'approved' | 'rejected';
+
 export type CommunityPost = {
   id: string;
   userId: string; 
@@ -24,4 +26,7 @@ export type CommunityPost = {
   shareCount: number; // Total number of shares
   edited: boolean; // Flag if the post has been edited
   deleted: boolean; // Flag if the post has been (soft) deleted
+  status: CommunityPostStatus; // Moderation status
+  moderationReason?: string; // Reason if rejected
 };
+
