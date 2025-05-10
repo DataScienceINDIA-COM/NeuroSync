@@ -15,6 +15,7 @@ import {
   CardDescription,
   CardFooter,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input"; // Added Input import
 import { Textarea } from "@/components/ui/textarea";
 import { format, parseISO } from "date-fns";
 import TaskService from "@/components/task/TaskService";
@@ -28,7 +29,7 @@ import type { User as AppUser } from "@/types/user";
 import AvatarDisplay from "@/components/avatar/Avatar";
 import { generateId } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut } from "lucide-react";
+import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle } from "lucide-react";
 import { generateAvatar } from "@/ai/flows/generate-avatar-flow"; 
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
@@ -60,6 +61,11 @@ function MainAppInterface() {
   const [avatarDescription, setAvatarDescription] = useState<string>("");
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState<boolean>(false);
   const [isSendingNotification, setIsSendingNotification] = useState(false);
+
+  // Profile Editing State
+  const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
+  const [editingName, setEditingName] = useState<string>("");
+
 
   const getLocalStorageKey = (prefix: string, userId?: string | null) => {
     if (!userId) { 
@@ -175,11 +181,6 @@ function MainAppInterface() {
         title: "Signed Out! 👋",
         description: "You've successfully signed out. Catch ya later!",
       });
-      // After signing out, AuthContext will handle setting appUser to guest.
-      // AppPageLogic will then show the login screen because authUser will be null.
-      // guestSessionActive in AppPageLogic should be reset if we want to force the choice again.
-      // For now, handleGuestSignIn in AppPageLogic manages guestSessionActive.
-      // If we want explicit sign out to show login immediately, that's handled by authUser becoming null.
     } else {
       toast({
         title: "Sign-Out Fail 😥",
@@ -287,6 +288,30 @@ function MainAppInterface() {
     else toast({ title: "Push Fail! 😭", description: `Couldn't send test notification: ${result.message}`, variant: "destructive" });
   };
 
+  const handleEditProfile = () => {
+    if (appUser) {
+      setEditingName(appUser.name);
+      setIsEditingProfile(true);
+    }
+  };
+
+  const handleSaveProfile = () => {
+    if (appUser && setAppUser && editingName.trim() !== "") {
+      setAppUser(prevUser => {
+        if (!prevUser) return null;
+        return { ...prevUser, name: editingName.trim() };
+      });
+      setIsEditingProfile(false);
+      toast({ title: "Profile Updated! 💅", description: "Your name is looking fresh!" });
+    } else if (editingName.trim() === "") {
+      toast({ title: "Hold Up! 🤔", description: "Name can't be empty, fam.", variant: "destructive" });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingProfile(false);
+  };
+
   const incompleteTasks = useMemo(() => tasks.filter(t => !t.isCompleted), [tasks]);
   const randomIncompleteTask = useClientSideRandom(incompleteTasks);
   
@@ -354,9 +379,11 @@ function MainAppInterface() {
               <CardHeader className="flex flex-col gap-2">
                 <div className="flex flex-row items-center justify-between">
                   <CardTitle className="drop-shadow-sm font-extrabold text-2xl text-primary">My Vibe</CardTitle>
-                  <Button variant="ghost" size="icon" onClick={() => toast({title: "Profile Edit Soon!", description:"This feature is cookin'!"})}  className="mr-1">
-                      <Edit3 className="h-4 w-4" />
-                  </Button>
+                  {!isEditingProfile && (
+                    <Button variant="ghost" size="icon" onClick={handleEditProfile} className="mr-1">
+                        <Edit3 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 <CardDescription className="text-muted-foreground">
                   Track your journey and glow up, bestie! ✨
@@ -367,7 +394,27 @@ function MainAppInterface() {
                   avatar={appUser?.avatar || null} 
                   size={100} 
                 />
-                <h2 className="text-2xl font-bold tracking-tight text-center">{appUser?.name || "Vibe User"}</h2>
+                {isEditingProfile && appUser ? (
+                  <div className="w-full space-y-2">
+                    <Input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      placeholder="Your cool name"
+                      className="text-center text-lg"
+                    />
+                    <div className="flex gap-2 justify-center">
+                      <Button onClick={handleSaveProfile} size="sm">
+                        <Save className="mr-1 h-4 w-4" /> Save
+                      </Button>
+                      <Button onClick={handleCancelEdit} variant="outline" size="sm">
+                        <XCircle className="mr-1 h-4 w-4" /> Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <h2 className="text-2xl font-bold tracking-tight text-center">{appUser?.name || "Vibe User"}</h2>
+                )}
                 <p className="text-sm text-muted-foreground">Streak: {appUser?.streak || 0} days <Zap className="inline h-4 w-4 text-yellow-400 fill-yellow-400" /></p>
                 <p className="text-3xl font-extrabold text-primary drop-shadow-md">VibePoints: {neuroPoints} VP</p>
                 <div className="w-full text-center">
@@ -399,17 +446,17 @@ function MainAppInterface() {
                   onChange={(e) => setAvatarDescription(e.target.value)}
                   maxLength={200}
                   className="min-h-[100px] focus:bg-background shadow-inner"
-                  disabled={isGeneratingAvatar || appUser.id.startsWith('guest_')} 
+                  disabled={isGeneratingAvatar || (appUser && appUser.id.startsWith('guest_'))} 
                 />
                 <Button
                   onClick={handleGenerateAvatar}
-                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || appUser.id.startsWith('guest_')}
+                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || (appUser && appUser.id.startsWith('guest_'))}
                   className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
                   {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  {isGeneratingAvatar ? "AI Makin' Magic..." : (appUser.id.startsWith('guest_') ? "Sign In to Generate" : "Generate My Vibe!")}
+                  {isGeneratingAvatar ? "AI Makin' Magic..." : ((appUser && appUser.id.startsWith('guest_')) ? "Sign In to Generate" : "Generate My Vibe!")}
                 </Button>
-                 {appUser.id.startsWith('guest_') && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
+                 {(appUser && appUser.id.startsWith('guest_')) && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
               </CardContent>
             </Card>
           </section>
@@ -539,18 +586,17 @@ function AppPageLogic() {
 
   const handleGuestSignIn = async () => {
     console.log("AppPageLogic: handleGuestSignIn called.");
-    const result = await signOutUser(); // Ensure any existing Firebase session is cleared
+    const result = await signOutUser(); 
     if(result.success || result.message?.includes("No user to sign out") || result.message?.includes("auth object not initialized")){
          toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest."});
          console.log("AppPageLogic: Sign out successful or no user was signed in. AuthContext will handle guest user setup.");
-         setGuestSessionActive(true); // Explicitly activate guest session for UI
+         setGuestSessionActive(true); 
     } else {
         toast({ title: "Guest Mode Hiccup", description: `Could not ensure guest mode cleanly: ${result.message}.`, variant: "destructive" });
         console.error("AppPageLogic: Error during guest sign-in (sign-out attempt):", result.message);
     }
   };
 
-  // Effect to reset guestSessionActive if user signs in with Firebase
   useEffect(() => {
     if (authUser) {
       setGuestSessionActive(false);
@@ -569,8 +615,6 @@ function AppPageLogic() {
     );
   }
 
-  // After authLoading, appUser should be populated by AuthContext (either as real or guest)
-  // UserContext now initializes user to null, so !appUser is a valid loading state.
   if (!appUser) { 
      console.log("AppPageLogic: AppUser is null after auth loading. AuthContext might still be setting it up or UserContext is initializing.");
      return (
@@ -582,22 +626,16 @@ function AppPageLogic() {
     );
   }
   
-  // If Firebase user is authenticated, show main app.
   if (authUser) {
      console.log("AppPageLogic: Firebase authUser exists. Rendering MainAppInterface.");
      return <MainAppInterface />;
   }
 
-  // If no Firebase user, but guest session is active (button clicked), show main app with guest user.
-  // AuthContext ensures appUser is a guest profile in this scenario.
   if (guestSessionActive && appUser.id.startsWith('guest_')) {
     console.log("AppPageLogic: Guest session is active. Rendering MainAppInterface for guest.");
     return <MainAppInterface />;
   }
   
-  // Otherwise (no Firebase user, guest session not active), show login options.
-  // AuthContext would have set appUser to a guest profile in the background,
-  // but we present the choice to the user.
   console.log("AppPageLogic: No Firebase authUser and guest session not active. Showing login/guest choice page.");
   return (
     <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
@@ -632,3 +670,5 @@ function AppPageLogic() {
     </div>
   );
 }
+
+    
