@@ -27,7 +27,7 @@ import { getAICoachNudge, useClientSideRandom } from "@/ai/coach";
 import { AICoachCard } from "@/components/coach/AICoachCard";
 import ContentDisplay from "@/components/content/ContentDisplay";
 import type { User as AppUser } from "@/types/user"; 
-import AvatarDisplay from "@/components/avatar/AvatarDisplay"; // Corrected import
+import AvatarDisplay from "@/components/avatar/AvatarDisplay";
 import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle, ChevronDown, MessageCircle } from "lucide-react";
@@ -35,7 +35,7 @@ import { generateAvatar } from "@/ai/flows/generate-avatar-flow";
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
 import { requestNotificationPermission, onMessageListener } from '@/lib/firebase-messaging';
-import type { MessagePayload } from "firebase/messaging"; // Import MessagePayload
+import type { MessagePayload } from "firebase/messaging";
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
 import { signOutUser } from '@/services/authService'; 
@@ -97,26 +97,21 @@ function MainAppInterface() {
       };
       setupNotifications();
 
-      // Handler for foreground messages
       const handleForegroundMessage = (payload: MessagePayload) => {
         console.log('Foreground message handled in page:', payload);
         toast({
           title: payload.notification?.title || "Vibe Check!",
           description: payload.notification?.body || "You've got a new update!",
-          // You can add actions here based on payload.data if needed
-          // e.g., action: <ToastAction altText="View">View</ToastAction>
         });
       };
       
-      // Subscribe to foreground messages
       const unsubscribePromise = onMessageListener(handleForegroundMessage)
-        .then(unsubscribeFn => unsubscribeFn) // The promise resolves with the unsubscribe function
+        .then(unsubscribeFn => unsubscribeFn)
         .catch(err => { 
           console.error('Failed to set up foreground message listener: ', err); 
-          return () => {}; // Return a no-op function in case of error
+          return () => {}; 
         });
       
-      // Cleanup function to unsubscribe when component unmounts or dependencies change
       return () => { 
         unsubscribePromise.then(fn => { 
           if (typeof fn === 'function') {
@@ -159,7 +154,7 @@ function MainAppInterface() {
       fetchTaskSuggestions();
    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, taskService, appUser?.id, appUser?.moodLogs?.length, appUser?.tasks?.length]); // taskService is stable if user doesn't change
+  }, [isClient, taskService, appUser?.id, appUser?.moodLogs?.length, appUser?.tasks?.length]);
 
 
   const handleFirebaseSignOutInternal = async () => {
@@ -210,7 +205,7 @@ function MainAppInterface() {
         sendNotificationToUser(authUser.uid, { 
           title: "Quest Smashed! 🚀",
           body: `You just crushed '${completedTask.name}'! Keep that W energy!`,
-          data: { taskId: completedTask.id, url: `/tasks/${completedTask.id}` } // Added URL for notification click
+          data: { taskId: completedTask.id, url: `/tasks/${completedTask.id}` } 
         }).then(response => {
           if (response.success) console.log("Task completion notification sent!");
           else console.error("Failed to send task completion notification:", response.message);
@@ -282,7 +277,7 @@ function MainAppInterface() {
     const result = await sendNotificationToUser(authUser.uid, { 
       title: "Vibe Check Test! 🧪",
       body: `Yo ${appUser.name}, this is a test notification! It's giving... works! 🎉`,
-      data: { test: "true", url: "/" } // Added URL for notification click
+      data: { test: "true", url: "/" } 
     });
     setIsSendingNotification(false);
     if (result.success) toast({ title: "Test Notification Sent! 📬", description: "Check your device, it should pop off!" });

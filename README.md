@@ -48,7 +48,27 @@ To set up the development environment for this project, follow these steps:
         yarn install
         ```
 
-5.  **Run the Development Server:**
+5.  **Configure Firebase Service Worker (for Push Notifications):**
+    *   Open the file `public/firebase-messaging-sw.js`.
+    *   This file contains a `firebaseConfig` object with placeholder values (e.g., `"YOUR_NEXT_PUBLIC_FIREBASE_API_KEY"`).
+    *   You **MUST** replace these placeholders with your actual Firebase project configuration values. These values should match those in your `.env.local` file.
+    *   **Example (in `public/firebase-messaging-sw.js`):**
+        ```javascript
+        // ...
+        const firebaseConfig = {
+          apiKey: "YOUR_ACTUAL_API_KEY_HERE", // Replace
+          authDomain: "YOUR_ACTUAL_AUTH_DOMAIN_HERE", // Replace
+          projectId: "YOUR_ACTUAL_PROJECT_ID_HERE", // Replace
+          storageBucket: "YOUR_ACTUAL_STORAGE_BUCKET_HERE", // Replace
+          messagingSenderId: "YOUR_ACTUAL_MESSAGING_SENDER_ID_HERE", // Replace
+          appId: "YOUR_ACTUAL_APP_ID_HERE", // Replace
+          measurementId: "YOUR_ACTUAL_MEASUREMENT_ID_HERE" // Replace (Optional)
+        };
+        // ...
+        ```
+    *   **Crucial:** The `messagingSenderId` in this file is especially important for FCM to work correctly in the background.
+
+6.  **Run the Development Server:**
     *   After successful installation, start the Next.js development server:
         ```bash
         npm run dev
@@ -57,10 +77,10 @@ To set up the development environment for this project, follow these steps:
         ```
     *   The application should now be running, typically at `http://localhost:3000` (or the port specified in your `package.json` if different, like `http://localhost:9002` for this project).
 
-6.  **Restart After Environment Variable Changes:**
+7.  **Restart After Environment Variable Changes:**
     *   **Crucial:** If you modify your `.env.local` file (or any `.env` file), you MUST restart your Next.js development server for the changes to take effect.
 
-By following these steps, you should have a correctly configured development environment, and Firebase authentication issues like `auth/configuration-not-found` should be resolved.
+By following these steps, you should have a correctly configured development environment, and Firebase authentication issues like `auth/configuration-not-found` should be resolved, and push notifications should be functional.
 
 # NeuroSync Project Roadmap
 ## AI Interaction Log

@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '@/types/user';
 import { predictHormone } from "@/ai/hormone-prediction"; 
-// generateId and getRandomHormone removed as initialization is handled by AuthContext
 
 interface UserContextType {
   user: User | null;
@@ -12,38 +11,35 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
-const USER_LOCAL_STORAGE_KEY_PREFIX = "vibeCheckUser_"; // Keep for consistency if referenced elsewhere, though AuthContext manages keys now
+const USER_LOCAL_STORAGE_KEY_PREFIX = "vibeCheckUser_"; 
 
 export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null); // Initialized as null, AuthContext will populate it
+  const [user, setUser] = useState<User | null>(null); 
 
-  // Persist user to localStorage when it changes. AuthContext is the primary loader.
   useEffect(() => {
     if (user && typeof window !== 'undefined' && user.id) {
       const key = user.id.startsWith('guest_') 
         ? `${USER_LOCAL_STORAGE_KEY_PREFIX}guest` 
         : `${USER_LOCAL_STORAGE_KEY_PREFIX}${user.id}`;
-      // console.log(`UserContext: Saving user ${user.id} to localStorage with key ${key}.`);
       localStorage.setItem(key, JSON.stringify(user));
     }
   }, [user]);
   
-  // Recalculate hormone levels when relevant user data changes
   useEffect(() => {
     if (user) {
       const newHormones = predictHormone(user); 
       
       setUser(prevUser => {
         if (!prevUser) return null;
+        // Only update if hormone levels actually change to avoid infinite loops
         if (JSON.stringify(prevUser.hormoneLevels) !== JSON.stringify(newHormones)) {
-          // console.log(`UserContext: Updating hormone levels for user ${prevUser.id}.`);
           return { ...prevUser, hormoneLevels: newHormones };
         }
         return prevUser;
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, JSON.stringify(user?.tasks), JSON.stringify(user?.moodLogs)]); // Dependencies refined to specific data points
+  }, [user?.id, JSON.stringify(user?.tasks), JSON.stringify(user?.moodLogs)]);
 
 
   return (

@@ -16,5 +16,4 @@ export type User = {
   rewards: Reward[];
   neuroPoints: number;
   fcmToken?: string; // For Firebase Cloud Messaging
-  // Removed completedTasks, claimedRewards, inProgressTasks as they are now part of tasks and rewards arrays with status flags
 };
