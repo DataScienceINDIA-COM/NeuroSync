@@ -1,9 +1,11 @@
+
 // src/lib/firebase-storage.ts
 import { getStorage, ref, uploadString, getDownloadURL, deleteObject, type StorageReference } from "firebase/storage";
-import { app } from "./firebase"; // Your Firebase app instance
+import { app, firebaseInitializationError } from "./firebase"; 
 import { generateId } from "./utils";
 
-const storage = getStorage(app);
+// @ts-ignore
+const storage = !firebaseInitializationError && app ? getStorage(app) : null;
 
 /**
  * Converts a data URI to a Blob object.
@@ -50,9 +52,11 @@ function dataURIToBlob(dataURI: string): Blob | null {
  * @returns A promise that resolves with the download URL of the uploaded file.
  */
 export async function uploadFileFromDataURI(dataURI: string, path: string): Promise<string> {
+  if (!storage) {
+    console.error("Firebase Storage is not initialized. Check Firebase configuration.");
+    throw new Error("Firebase Storage is not initialized.");
+  }
   const storageRef = ref(storage, path);
-  // Firebase's uploadString expects 'data_url' format for data URIs.
-  // It handles the conversion from base64 internally.
   const snapshot = await uploadString(storageRef, dataURI, 'data_url');
   const downloadURL = await getDownloadURL(snapshot.ref);
   return downloadURL;
@@ -64,17 +68,20 @@ export async function uploadFileFromDataURI(dataURI: string, path: string): Prom
  * @returns A promise that resolves when the file is deleted.
  */
 export async function deleteFileFromStorage(filePath: string): Promise<void> {
+  if (!storage) {
+    console.error("Firebase Storage is not initialized. Check Firebase configuration.");
+    throw new Error("Firebase Storage is not initialized.");
+  }
   const storageRef = ref(storage, filePath);
   try {
     await deleteObject(storageRef);
     console.log(`File deleted successfully: ${filePath}`);
   } catch (error: any) {
-    // Handle specific errors, e.g., object-not-found
     if (error.code === 'storage/object-not-found') {
       console.warn(`File not found, cannot delete: ${filePath}`);
     } else {
       console.error(`Error deleting file ${filePath}:`, error);
-      throw error; // Re-throw other errors
+      throw error; 
     }
   }
 }
@@ -84,19 +91,30 @@ export async function deleteFileFromStorage(filePath: string): Promise<void> {
  * @param userId The ID of the user.
  * @param imageDataURI The data URI of the avatar image.
  * @param previousAvatarPath Optional. The path of the previous avatar to delete.
- * @returns A promise that resolves with the download URL of the uploaded avatar.
+ * @returns A promise that resolves with an object containing the download URL and storage path of the uploaded avatar.
  */
-export async function uploadAvatarToStorage(userId: string, imageDataURI: string, previousAvatarPath?: string): Promise<string> {
+export async function uploadAvatarToStorage(
+  userId: string,
+  imageDataURI: string,
+  previousAvatarPath?: string
+): Promise<{ downloadURL: string; imagePath: string }> {
+  if (!storage) {
+    console.error("Firebase Storage is not initialized. Check Firebase configuration.");
+    throw new Error("Firebase Storage is not initialized.");
+  }
+
   if (previousAvatarPath) {
     try {
       await deleteFileFromStorage(previousAvatarPath);
     } catch (error) {
       console.warn("Failed to delete previous avatar, proceeding with upload:", error);
-      // Non-critical, so we can proceed.
     }
   }
-  const fileExtension = imageDataURI.substring(imageDataURI.indexOf('/') + 1, imageDataURI.indexOf(';base64'));
-  const avatarPath = `avatars/${userId}/${generateId()}.${fileExtension || 'png'}`;
+  const fileExtensionMatch = imageDataURI.match(/data:image\/(.*?);base64,/);
+  const fileExtension = fileExtensionMatch ? fileExtensionMatch[1] : 'png';
+  
+  const avatarPath = `avatars/${userId}/${generateId()}.${fileExtension}`;
   const downloadURL = await uploadFileFromDataURI(imageDataURI, avatarPath);
-  return downloadURL;
+  
+  return { downloadURL, imagePath: avatarPath };
 }
