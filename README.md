@@ -99,6 +99,11 @@ By following these steps, you should have a correctly configured development env
 This section is for AI agents to log their activities and insights.
 
 ### Progress Updates
+- Resolved "A 'use server' file can only export async functions..." errors in Genkit flows by ensuring only async wrapper functions and their input/output types are exported. Other Zod schemas and flow definitions are kept internal to the flow files.
+- Strengthened Firebase initialization checks in `src/lib/firebase.ts` and `src/lib/firebase-admin.ts` to provide clearer console error messages when essential `NEXT_PUBLIC_FIREBASE_...` environment variables are missing or invalid. This helps pinpoint configuration issues faster.
+- Added prominent warnings and detailed instructions within `public/firebase-messaging-sw.js` regarding the necessity of manually configuring Firebase credentials in that file, as it's not automatically updated from `.env.local`.
+- Updated this `README.md` with more comprehensive environment setup instructions, troubleshooting tips for common Firebase errors (like "API key not valid" and "auth/configuration-not-found"), and explanations for resolved issues.
+- Fixed numerous "Module not found" errors by correcting import paths, ensuring consistency between relative paths and alias paths (`@/...`).
 - Integrated CommunityModerator agent into `CommunityService` for AI-powered moderation of posts and comments.
 - Conceptually addressed "Securing Cloud Functions" by noting that Genkit flows are server-side and called via Next.js actions, which inherently provides a layer of security. Input validation via Zod is also a key security aspect. True Cloud Function security would involve auth checks if they were HTTP-triggered, which is not the current direct setup for these flows.
 - Successfully implemented the `CommunityModerator` agent within the `CommunityService`. This completes the AI-powered moderation workflow for posts and comments. `CommunityDisplay` now reflects moderation outcomes to users via toast notifications for rejected content.
@@ -108,8 +113,6 @@ This section is for AI agents to log their activities and insights.
 - Implemented `IntegrationService` in `src/services/integrationService.ts` to manage connections with external wellness platforms. This service currently uses localStorage for persistence and simulates OAuth flows.
 - Implemented real-time notifications using Firebase Cloud Messaging (FCM). Added service worker for background notifications and enhanced foreground message handling with toasts.
 - Enhanced Firebase initialization checks in `src/lib/firebase.ts` to validate all critical public environment variables.
-- Added prominent warnings in `public/firebase-messaging-sw.js` regarding manual configuration.
-- Updated `README.md` with more detailed environment setup instructions.
 - Updated `.env` file to serve as a comprehensive template.
 
 ### Decisions
@@ -119,12 +122,23 @@ This section is for AI agents to log their activities and insights.
 - `IntegrationService` will store integration details (tokens, status) in localStorage, scoped by `userId`.
 - Real-time notifications will be used for task completions, AI coach nudges, and important community updates.
 
-### Issues
-- "Securing Cloud Functions" is a broad topic. The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
-- `IntegrationService` currently simulates OAuth and API calls. Real implementation will require actual OAuth libraries and API client logic for each platform. Secure token storage (beyond localStorage for production) should be considered.
-- FCM Service Worker (`public/firebase-messaging-sw.js`) requires manual configuration of Firebase project credentials. This is a frequent point of error if not kept in sync with `.env.local`.
-- `NEXT_PUBLIC_FIREBASE_VAPID_KEY` must be correctly set in `.env.local` for web push notifications to function.
-- Persistent "API key not valid" errors indicate that `.env.local` might not be correctly populated or the Next.js dev server was not restarted after changes.
+### Issues & Troubleshooting
+
+- **`FirebaseError: Installations: Create Installation request failed with error "400 INVALID_ARGUMENT: API key not valid..."` or `auth/configuration-not-found`:**
+    - These errors typically indicate a problem with your Firebase setup.
+    - **Check `.env.local`:** Ensure you have created `.env.local` in the project root and correctly populated **all** `NEXT_PUBLIC_FIREBASE_...` variables from your Firebase project settings. Use the `.env` file as a template.
+    - **Restart Dev Server:** After making any changes to `.env.local`, you **MUST** restart your Next.js development server (e.g., stop and re-run `npm run dev`).
+    - **`public/firebase-messaging-sw.js`:** This file **REQUIRES MANUAL CONFIGURATION**. The `firebaseConfig` object within it must be updated with your actual Firebase project values, matching `.env.local`.
+    - **Enable Auth Providers:** In the Firebase Console, go to Authentication > Sign-in method and ensure "Google" and "Email/Password" (or any other providers you intend to use) are enabled.
+- **`A "use server" file can only export async functions...` Error:**
+    - This Next.js error occurs if a file marked with the `'use server';` directive exports non-async values directly.
+    - For Genkit flows (e.g., files in `src/ai/flows/`), ensure that **only the main async wrapper function** (e.g., `export async function getRecommendedContent(...)`) and its TypeScript input/output **types** are exported.
+    - Zod schemas (e.g., `RecommendedContentInputSchema`) and the flow definitions themselves (e.g., `const getRecommendedContentFlow = ai.defineFlow(...)`) should **not** be exported directly from these files. They are internal to the flow's implementation.
+- **"Module not found" Errors:**
+    - These errors typically arise from incorrect import paths. Double-check that paths are correct, especially when mixing relative paths (`../`) and alias paths (`@/components/...`). Ensure the `tsconfig.json` paths are correctly configured.
+- **"Securing Cloud Functions" is a broad topic:** The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
+- **`IntegrationService` currently simulates OAuth:** Real implementation will require actual OAuth libraries and API client logic for each platform. Secure token storage (beyond localStorage for production) should be considered.
+- **`NEXT_PUBLIC_FIREBASE_VAPID_KEY` must be correctly set in `.env.local` for web push notifications to function.**
 
 ### NeuroSync Project Roadmap
 
@@ -489,3 +503,4 @@ Objective: Advanced Genkit and Firebase integration for new products, metrics , 
     86. [ ] Clean ups: Remove any "mock" functions. 
     87. [ ] Bug fixes
     
+```
