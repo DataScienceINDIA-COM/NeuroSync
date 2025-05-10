@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '@/types/user';
-import { predictHormone } from "@/ai/hormone-prediction"; 
+import { getRandomHormone, predictHormone } from "@/ai/hormone-prediction"; 
+import { generateId } from '@/lib/utils';
 
 interface UserContextType {
   user: User | null;
@@ -28,14 +29,14 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   
   useEffect(() => {
     if (user) {
-      // Ensure moodLogs is an array before passing to predictHormone
-      const moodLogsForPrediction = Array.isArray(user.moodLogs) ? user.moodLogs : [];
-      const updatedUser = { ...user, moodLogs: moodLogsForPrediction };
-
+      // When user data (like moodLogs or completedTasks) changes, recalculate hormones.
+      // For now, we are not passing external activityData.
+      // In a future step, if activityData were fetched, it could be passed here.
+      const newHormones = predictHormone(user /*, optionalActivityData */); 
+      
       setUser(prevUser => {
         if (!prevUser) return null;
-        // Use the user with guaranteed moodLogs array for prediction
-        const newHormones = predictHormone(updatedUser); 
+        // Only update if hormone levels actually changed to avoid unnecessary re-renders
         if (JSON.stringify(prevUser.hormoneLevels) !== JSON.stringify(newHormones)) {
           console.log(`UserContext: Updating hormone levels for user ${prevUser.id}.`);
           return { ...prevUser, hormoneLevels: newHormones };
@@ -43,6 +44,8 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return prevUser;
       });
     }
+  // Update dependencies: recalculate hormones if user ID, completed tasks, or mood logs change.
+  // Stringifying complex objects like completedTasks and moodLogs for dependency array.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, JSON.stringify(user?.completedTasks), JSON.stringify(user?.moodLogs)]);
 
