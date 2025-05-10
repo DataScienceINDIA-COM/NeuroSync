@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
@@ -64,7 +65,7 @@ function MainAppInterface() {
 
   const taskService = useMemo(() => {
     if (!appUser || !isClient) return null; 
-    return new TaskService(); 
+    return new TaskService(appUser); // Pass appUser to TaskService constructor
   }, [appUser, isClient]);
 
 
@@ -642,4 +643,3 @@ function AppPageLogic() {
     </div>
   );
 }
-
