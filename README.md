@@ -218,6 +218,7 @@ This roadmap outlines the key phases and steps for the development of the NeuroS
 - [x] **Improve Accessibility:** Initial pass in UI components.
 - [x] **Improve Stability for Connections:** Error handling in flows and retries.
 - [ ] **Implement Analytics Tracking:** For key events like onboarding (conceptualized).
+- [ ] **A/B Testing Framework for Onboarding:** To optimize user engagement and retention.
 
 ### Tool Usage
 
@@ -497,6 +498,7 @@ Objective: Enhance user experience and add new features.
         *   [x] Persist onboarding status in Firestore (`src/actions/user-actions.ts`)
     69. [ ] Code deployment
     70. [ ] Implement Analytics Tracking (e.g., Mixpanel, Firebase Analytics for key events like onboarding completion, feature engagement) (Conceptualized)
+    71. [ ] A/B Testing for Onboarding: Set up infrastructure (e.g., using Firebase Remote Config or a dedicated A/B testing tool) to test variations of the onboarding flow. Track completion rates and early engagement for different versions to optimize the user experience. (Conceptualized)
 
 
 Phase 6: Advanced AI & Refinements (Steps 81-100)
