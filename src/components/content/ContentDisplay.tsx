@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import type { Content } from "@/types/content";
 import { Button } from "@/components/ui/button";
-import ContentService from "@/services/ContentService";
+import ContentService from "@/components/content/ContentService";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BookOpen, PlayCircle, ExternalLink } from "lucide-react";
 import { getRecommendedContent } from "@/ai/flows/recommended-content";
@@ -58,14 +58,14 @@ export default function ContentDisplay() {
 
   if (!isClient || !contentService) {
     return (
-      <Card className="shadow-lg">
+      <Card className="shadow-lg" aria-labelledby="content-loading-title">
         <CardHeader>
           <CardTitle id="content-loading-title" className="flex items-center gap-2">
             <PlayCircle className="h-6 w-6 text-accent" aria-hidden="true" />
             Content Drops 🎬
           </CardTitle>
         </CardHeader>
-        <CardContent role="alert" aria-busy="true" aria-labelledby="content-loading-title">
+        <CardContent role="alert" aria-busy="true">
           <p className="text-muted-foreground text-center py-10">Loading fresh content picks... It's gonna be a vibe! ✨</p> 
         </CardContent>
       </Card>
@@ -78,7 +78,7 @@ export default function ContentDisplay() {
     : contentList; // Show all if no recommendations or recommendations are empty
 
   return (
-    <Card className="shadow-lg">
+    <Card className="shadow-lg" aria-labelledby="content-title">
       <CardHeader>
         <CardTitle id="content-title" className="flex items-center gap-2">
           <PlayCircle className="h-6 w-6 text-accent" aria-hidden="true" />
@@ -90,7 +90,7 @@ export default function ContentDisplay() {
       {filteredContentList.length === 0 ? (
          <p className="text-muted-foreground text-center py-10">Nothin' new here yet, fam. Peep back later for some fire content! Bet. 😉</p> 
       ) : (
-        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-label="List of curated content">
           {filteredContentList.map((content) => (
             <li key={content.id}>
               <Card className="p-4 rounded-xl shadow-md bg-card/90 hover:shadow-lg transition-shadow border-border/70 flex flex-col justify-between h-full">
@@ -126,3 +126,4 @@ export default function ContentDisplay() {
     </Card>
   );
 }
+
