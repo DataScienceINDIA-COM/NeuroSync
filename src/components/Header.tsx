@@ -10,8 +10,8 @@ interface AuthSectionProps {
 
 const AuthSection: React.FC<AuthSectionProps> = ({ authUser, onSignOut }) => {
   return authUser ? (
-    <Button variant="outline" size="sm" onClick={onSignOut} className="shadow-sm hover:shadow">
-      <LogOut className="mr-2 h-4 w-4" /> Sign Out
+    <Button variant="outline" size="sm" onClick={onSignOut} className="shadow-sm hover:shadow" aria-label="Sign out">
+      <LogOut className="mr-2 h-4 w-4" aria-hidden="true" /> Sign Out
     </Button>
   ) : null; 
 };
@@ -22,10 +22,10 @@ interface HeaderProps {
 
 export function Header({ children }: HeaderProps) {
   return (
-    <header className="py-6 px-4 md:px-6 border-b border-border/50">
+    <header role="banner" className="py-6 px-4 md:px-6 border-b border-border/50">
       <div className="container mx-auto flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Sparkles className="h-8 w-8 text-accent" />
+        <div className="flex items-center gap-3" aria-label="Vibe Check application logo and title">
+          <Sparkles className="h-8 w-8 text-accent" aria-hidden="true" />
           {/* Placeholder for Pixar-level avatar animation */}
           {/* TODO: Replace this placeholder with the actual complex animation component */}
           <div className="relative h-[50px] w-[200px] md:h-[60px] md:w-[250px]">

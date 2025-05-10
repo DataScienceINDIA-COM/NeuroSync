@@ -46,6 +46,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { MoodLogsProvider, useMoodLogs } from "@/contexts/MoodLogsContext";
+import { auth } from '@/lib/firebase';
 
 
 function MainAppInterface() {
@@ -61,7 +62,11 @@ function MainAppInterface() {
   const [isEditingProfile, setIsEditingProfile] = useState<boolean>(false);
   const [editingName, setEditingName] = useState<string>("");
 
-  const taskService = useMemo(() => new TaskService(), []); // TaskService is now stateless
+  const taskService = useMemo(() => {
+    if (!appUser) return null; // Guard against null appUser
+    return new TaskService(appUser); // Pass the appUser to TaskService constructor
+  }, [appUser]);
+
 
   useEffect(() => {
     setIsClient(true); 
@@ -95,7 +100,7 @@ function MainAppInterface() {
   // AI Task Suggestions Effect
   useEffect(() => {
     const fetchTaskSuggestions = async () => {
-     if (isClient && appUser && appUser.moodLogs && appUser.tasks.length <= 5 && !appUser.id.startsWith('guest_')) {
+     if (isClient && appUser && appUser.moodLogs && appUser.tasks.length <= 5 && !appUser.id.startsWith('guest_') && taskService) {
        const suggestedTaskDetailsOutput = await taskService.getSuggestedTasks(appUser.moodLogs, appUser.hormoneLevels, appUser.tasks);
        if (suggestedTaskDetailsOutput && suggestedTaskDetailsOutput.suggestions) {
          const newTasksPromises = suggestedTaskDetailsOutput.suggestions.map(async (taskDetail) => {
@@ -135,28 +140,33 @@ function MainAppInterface() {
     }
   };
 
-  // handleLogMood is now taken from MoodLogsContext
-  // const handleLogMood = (newLogData: Omit<MoodLog, 'id'>) => {
-  //   if (!appUser || !setAppUser) return;
-  //   const newLog: MoodLog = { ...newLogData, id: generateId() };
-  //   setAppUser(prevUser => {
-  //     if (!prevUser) return null;
-  //     const updatedMoodLogs = [newLog, ...(prevUser.moodLogs || [])].sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
-  //     return { ...prevUser, moodLogs: updatedMoodLogs };
-  //   });
-  // };
 
   const handleTaskCompletion = async (taskId: string) => {
-    if (!appUser || !setAppUser) return;
+    if (!appUser || !setAppUser || !taskService) return;
     const taskToComplete = appUser.tasks.find(t => t.id === taskId);
     if (!taskToComplete || taskToComplete.isCompleted) return;
 
     const updatedTasks = taskService.updateTaskInList(taskId, { isCompleted: true }, appUser.tasks);
-    const completedTask = updatedTasks.find(t => t.id === taskId); // Get the updated task
+    const completedTask = updatedTasks.find(t => t.id === taskId); 
 
     if (completedTask) {
       const newNeuroPoints = appUser.neuroPoints + (completedTask.rewardPoints * (completedTask.hasNeuroBoost ? 10 : 1));
-      const { newStreak, newLastCompletedDay } = taskService.calculateNewStreak(appUser.lastCompletedDay);
+      // Streak calculation is handled by TaskService, user object is updated there
+      // For this simplified setup, we'll directly manage streak here or ensure TaskService updates a shared user object.
+      // Assuming taskService.updateTask already handled streak on the user object instance it holds
+      // We'll rely on the user object instance from useAppUser() to be updated via setAppUser
+      const currentDayOfYear = getDayOfYear(new Date());
+      let newStreak = appUser.streak;
+      let newLastCompletedDay = appUser.lastCompletedDay;
+
+      if (appUser.lastCompletedDay !== currentDayOfYear) {
+        if (appUser.lastCompletedDay === currentDayOfYear -1 || (currentDayOfYear === 0 && appUser.lastCompletedDay === 365) /* handles year transition */) {
+          newStreak +=1;
+        } else {
+          newStreak = 1; // Reset if not consecutive or first completion
+        }
+        newLastCompletedDay = currentDayOfYear;
+      } // If already completed a task today, streak remains same.
       
       setAppUser(prevUser => {
         if (!prevUser) return null;
@@ -288,8 +298,8 @@ function MainAppInterface() {
   
   if (!isClient || !appUser ) { 
     return (
-        <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
-            <Loader2 className="h-12 w-12 text-accent animate-spin mb-4" />
+        <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4" role="alert" aria-live="polite">
+            <Loader2 className="h-12 w-12 text-accent animate-spin mb-4" aria-hidden="true" />
             <p className="text-muted-foreground">Getting your main vibe ready...</p>
         </div>
     );
@@ -306,18 +316,18 @@ function MainAppInterface() {
       <main className="flex-grow container mx-auto p-4 md:p-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 lg:gap-8 items-start">
 
-           <section className="lg:col-span-1 space-y-6">
+           <section aria-labelledby="my-vibe-title" className="lg:col-span-1 space-y-6">
            <Card className="shadow-lg border-primary/50 rounded-xl overflow-hidden">
               <CardHeader className="bg-gradient-to-br from-primary/80 to-accent/80 p-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <UserIcon className="h-7 w-7 text-primary-foreground drop-shadow-md" />
-                    <CardTitle className="text-2xl font-bold tracking-tight text-primary-foreground drop-shadow-md">
+                    <UserIcon className="h-7 w-7 text-primary-foreground drop-shadow-md" aria-hidden="true" />
+                    <CardTitle id="my-vibe-title" className="text-2xl font-bold tracking-tight text-primary-foreground drop-shadow-md">
                       My Vibe
                     </CardTitle>
                   </div>
                   {!isEditingProfile && (
-                    <Button variant="ghost" size="icon" onClick={handleEditProfile} className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/20 rounded-full">
+                    <Button variant="ghost" size="icon" onClick={handleEditProfile} className="text-primary-foreground/80 hover:text-primary-foreground hover:bg-white/20 rounded-full" aria-label="Edit profile name">
                         <Edit3 className="h-5 w-5" />
                     </Button>
                   )}
@@ -338,6 +348,7 @@ function MainAppInterface() {
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       placeholder="Your cool name"
+                      aria-label="Edit your name"
                       className="text-center text-lg font-semibold border-primary/50 focus:ring-primary"
                     />
                     <div className="flex gap-2 justify-center">
@@ -353,21 +364,21 @@ function MainAppInterface() {
                   <h2 className="text-2xl font-bold tracking-tight text-center text-foreground">{appUser.name || "Vibe User"}</h2>
                 )}
                 <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Streak: <span className="font-bold text-amber-500">{appUser.streak || 0} days</span> <Zap className="inline h-4 w-4 text-amber-400 fill-amber-400" /></p>
+                    <p className="text-sm text-muted-foreground">Streak: <span className="font-bold text-amber-500">{appUser.streak || 0} days</span> <Zap className="inline h-4 w-4 text-amber-400 fill-amber-400" aria-label="Streak icon" /></p>
                     <p className="text-3xl font-extrabold text-primary drop-shadow-md mt-1">VibePoints: {appUser.neuroPoints} VP</p>
                 </div>
                 <AICoachCard user={appUser} nudge={aiNudge} />
 
               </CardContent>
               <CardFooter className="p-5 bg-background border-t border-border/30 flex justify-center">
-                {authUser && appUser.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
+                {authUser && appUser.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-label="Loading" /> : <Bell className="mr-2 h-4 w-4" aria-hidden="true" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
               </CardFooter>
             </Card>
 
             <Card className="shadow-lg">
               <CardHeader className="flex flex-col space-y-2">
-                <CardTitle className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary">
-                  <ImagePlus className="h-5 w-5 text-primary" /> AI Avatar Studio ✨
+                <CardTitle id="avatar-studio-title" className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary">
+                  <ImagePlus className="h-5 w-5 text-primary" aria-hidden="true" /> AI Avatar Studio ✨
                 </CardTitle>
                 <CardDescription className="text-muted-foreground">
                   Unleash your inner artist! Describe your dream avatar, and watch our AI bring it to life. 🎨
@@ -375,6 +386,7 @@ function MainAppInterface() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
+                  aria-labelledby="avatar-studio-title"
                   placeholder="e.g., 'a neon-lit cyberpunk fox with headphones', 'a serene cosmic jellyfish floating in a nebula', 'a retro pixel art robot chilling on a cloud'"
                   value={avatarDescription}
                   onChange={(e) => setAvatarDescription(e.target.value)}
@@ -384,10 +396,11 @@ function MainAppInterface() {
                 />
                 <Button
                   onClick={handleGenerateAvatar}
+                  aria-label="Generate AI avatar"
                   disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || appUser.id.startsWith('guest_')}
                   className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
-                  {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                  {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-label="Generating avatar" /> : <Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />}
                   {isGeneratingAvatar ? "AI Makin' Magic..." : (appUser.id.startsWith('guest_') ? "Sign In to Generate" : "Generate My Vibe!")}
                 </Button>
                  {appUser.id.startsWith('guest_') && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
@@ -395,11 +408,11 @@ function MainAppInterface() {
             </Card>
           </section>
 
-          <section className="lg:col-span-2 flex flex-col space-y-6">
+          <section aria-labelledby="daily-vibe-check-title" className="lg:col-span-2 flex flex-col space-y-6">
              <Card className="shadow-md border-accent">
               <CardHeader className="flex flex-col space-y-2">
                 <div className="flex flex-row items-center justify-between">
-                  <CardTitle className="drop-shadow-sm font-extrabold text-xl text-primary flex items-center gap-2"><CalendarClock className="mr-2 h-5 w-5" />Daily Vibe Check</CardTitle>
+                  <CardTitle id="daily-vibe-check-title" className="drop-shadow-sm font-extrabold text-xl text-primary flex items-center gap-2"><CalendarClock className="mr-2 h-5 w-5" aria-hidden="true" />Daily Vibe Check</CardTitle>
                 </div>
                 <CardDescription className="text-muted-foreground">
                   How are you feeling today? Log your mood, fam. ✨
@@ -412,35 +425,35 @@ function MainAppInterface() {
 
             <Card className="shadow-md border-accent">
                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="font-extrabold text-xl drop-shadow-sm flex items-center"><BarChart3 className="mr-2 h-5 w-5" />Mood Insights</CardTitle> 
+                  <CardTitle id="mood-insights-title" className="font-extrabold text-xl drop-shadow-sm flex items-center"><BarChart3 className="mr-2 h-5 w-5" aria-hidden="true" />Mood Insights</CardTitle> 
                 </CardHeader>
-                 <CardContent><MoodChart moodLogs={moodLogs} /></CardContent>
+                 <CardContent aria-labelledby="mood-insights-title"><MoodChart moodLogs={moodLogs} /></CardContent>
             </Card>
 
             <Accordion type="single" collapsible className="w-full shadow-lg rounded-xl border border-primary/30">
               <AccordionItem value="item-1">
                 <Card className="border-none rounded-xl">
-                  <AccordionTrigger className="w-full p-0 hover:no-underline">
+                  <AccordionTrigger className="w-full p-0 hover:no-underline" aria-label="Toggle hormone levels details">
                     <CardHeader className="flex flex-row items-center justify-between w-full pb-2 hover:bg-primary/5 rounded-t-xl group">
                       <div className="flex items-center gap-2">
-                        <Brain className="h-6 w-6 text-primary" />
-                        <CardTitle className="drop-shadow-sm font-extrabold text-xl text-primary">Brain Juice Levels</CardTitle>
+                        <Brain className="h-6 w-6 text-primary" aria-hidden="true" />
+                        <CardTitle id="brain-juice-title" className="drop-shadow-sm font-extrabold text-xl text-primary">Brain Juice Levels</CardTitle>
                       </div>
-                      <ChevronDown className="h-5 w-5 text-primary transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                      <ChevronDown className="h-5 w-5 text-primary transition-transform duration-200 group-data-[state=open]:rotate-180" aria-hidden="true" />
                     </CardHeader>
                   </AccordionTrigger>
                   <AccordionContent>
                     <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-4">
-                      <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
-                      <div><Zap className="inline h-4 w-4 mr-1 text-red-500" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
+                      <div><SparklesIcon className="inline h-4 w-4 mr-1 text-blue-500" aria-hidden="true" />Dopamine: <span className="font-semibold">{appUser.hormoneLevels.dopamine}%</span></div>
+                      <div><Zap className="inline h-4 w-4 mr-1 text-red-500" aria-hidden="true" />Adrenaline: <span className="font-semibold">{appUser.hormoneLevels.adrenaline}%</span></div>
                       <div>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-orange-500" aria-hidden="true">
                               <path d="M18 10H6L3 18h18l-3-8Z"/><path d="M12 6V2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/>
                           </svg>
                           Cortisol: <span className="font-semibold">{appUser.hormoneLevels.cortisol}%</span>
                       </div>
                       <div>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline h-4 w-4 mr-1 text-green-500" aria-hidden="true">
                               <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m4.93 19.07 1.41-1.41"/><path d="m17.66 6.34 1.41-1.41"/>
                           </svg>
                           Serotonin: <span className="font-semibold">{appUser.hormoneLevels.serotonin}%</span>
@@ -459,30 +472,30 @@ function MainAppInterface() {
 
             <Card className="shadow-lg">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary"><ListChecks className="h-5 w-5 text-primary"/>Today's Quests</CardTitle>
+                <CardTitle id="todays-quests-title" className="flex items-center gap-2 drop-shadow-sm font-extrabold text-xl text-primary"><ListChecks className="h-5 w-5 text-primary" aria-hidden="true"/>Today's Quests</CardTitle>
                  <CardDescription className="text-muted-foreground">Small W's = Big Vibe Energy. Complete quests to get VibePoints!</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent aria-labelledby="todays-quests-title">
                 {appUser.tasks.length > 0 ? (
-                  <div className="space-y-3">
+                  <ul className="space-y-3">
                   {appUser.tasks.map((task) => (
-                    <div key={task.id} className={`p-4 border rounded-xl flex justify-between items-center transition-all ${task.isCompleted ? "bg-muted opacity-60 shadow-inner" : "bg-card hover:shadow-md"}`}>
+                    <li key={task.id} className={`p-4 border rounded-xl flex justify-between items-center transition-all ${task.isCompleted ? "bg-muted opacity-60 shadow-inner" : "bg-card hover:shadow-md"}`}>
                       <div>
                         <h4 className={`font-medium ${task.isCompleted ? "line-through text-muted-foreground" : "text-card-foreground"}`}>{task.name}</h4>
                         <p className="text-xs text-muted-foreground">{task.description}</p>
                         <p className="text-xs mt-1">
                           Reward: <span className="font-semibold text-accent">{task.rewardPoints} VP</span>
-                          {task.hasNeuroBoost && <span className="ml-1 text-xs text-yellow-500 font-semibold">(<Brain className="inline h-3 w-3"/> x10 Vibe Boost!)</span>}
+                          {task.hasNeuroBoost && <span className="ml-1 text-xs text-yellow-500 font-semibold">(<Brain className="inline h-3 w-3" aria-hidden="true"/> x10 Vibe Boost!)</span>}
                         </p>
                       </div>
                       {!task.isCompleted && (
-                        <Button onClick={() => handleTaskCompletion(task.id)} size="sm" variant="default" className="shadow hover:shadow-md active:shadow-inner">
+                        <Button onClick={() => handleTaskCompletion(task.id)} size="sm" variant="default" className="shadow hover:shadow-md active:shadow-inner" aria-label={`Complete task: ${task.name}`}>
                           GG! 
                         </Button>
                       )}
-                    </div>
+                    </li>
                   ))}
-                  </div>
+                  </ul>
                 ) : (
                   <p className="text-muted-foreground text-center py-6">No quests today, fam. AI is cookin' some up, or add your own!</p> 
                 )}
@@ -491,30 +504,30 @@ function MainAppInterface() {
              <Card className="shadow-md border-accent">
                 <CardHeader className="flex flex-col space-y-2">
                   <div className="flex flex-row items-center justify-between">
-                    <CardTitle className="drop-shadow-sm font-extrabold text-xl flex items-center text-primary"><Lightbulb className="mr-2 h-5 w-5" />AI Suggestions</CardTitle>
+                    <CardTitle id="ai-suggestions-title" className="drop-shadow-sm font-extrabold text-xl flex items-center text-primary"><Lightbulb className="mr-2 h-5 w-5" aria-hidden="true" />AI Suggestions</CardTitle>
                   </div>
                   <CardDescription className="text-muted-foreground">
                      Check what the AI have for you!
                   </CardDescription>
                 </CardHeader>
-               <CardContent>
+               <CardContent aria-labelledby="ai-suggestions-title">
                  <PersonalizedInsights moodLogs={moodLogs} />
                </CardContent>
             </Card>
           </section>
         </div>
         
-        <section className="lg:col-span-3 space-y-6 mt-10">
+        <section aria-labelledby="rewards-title" className="lg:col-span-3 space-y-6 mt-10">
            <RewardDisplay rewards={appUser.rewards} neuroPoints={appUser.neuroPoints} onClaimReward={handleClaimReward} />
         </section>
-        <section className="lg:col-span-3 space-y-6 mt-10">
+        <section aria-labelledby="community-title" className="lg:col-span-3 space-y-6 mt-10">
            <CommunityDisplay />
         </section>
-        <section className="lg:col-span-3 space-y-6 mt-10">
+        <section aria-labelledby="content-title" className="lg:col-span-3 space-y-6 mt-10">
            <ContentDisplay />
         </section>
       </main>
-      <footer className="text-center p-6 border-t border-border/50 text-sm text-muted-foreground mt-10">
+      <footer role="contentinfo" className="text-center p-6 border-t border-border/50 text-sm text-muted-foreground mt-10">
         <p>&copy; {new Date().getFullYear()} Vibe Check. Keep it 💯. ✌️</p> 
       </footer>
     </div>
@@ -526,7 +539,7 @@ export default function RootPage() {
   return (
     <AppUserProvider> 
       <AuthContextProvider> 
-        <MoodLogsProvider> {/* Added MoodLogsProvider here */}
+        <MoodLogsProvider> 
           <AppPageLogic />
         </MoodLogsProvider>
       </AuthContextProvider>
@@ -540,52 +553,45 @@ function AppPageLogic() {
   const { toast } = useToast(); 
   const [guestSessionActive, setGuestSessionActive] = useState(false);
   
-  // console.log("AppPageLogic: Rendering. AuthLoading:", authLoading, "AppUser:", appUser?.id, "AuthUser:", authUser?.uid, "GuestSessionActive:", guestSessionActive);
 
   const handleGuestSignIn = async () => {
-    // console.log("AppPageLogic: handleGuestSignIn called.");
-    // Clear any existing Firebase auth session first
-    if (auth.currentUser) { // `auth` should be imported from '@/lib/firebase' or available in scope
-        await signOutUser(); // Ensure previous session is cleared
+    if (auth.currentUser) { 
+        await signOutUser(); 
     }
-    // AuthContext will handle creating a new guest AppUser
+    setAppUser(null); // Explicitly clear app user first
     setGuestSessionActive(true); 
     toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest. Some features may be limited."});
   };
 
   useEffect(() => {
-    if (authUser) { // If there's a Firebase authenticated user
-      setGuestSessionActive(false); // Ensure guest session is marked as inactive
-    } else if (appUser && appUser.id.startsWith('guest_')) { // If no Firebase user, but appUser is guest
+    if (authUser) { 
+      setGuestSessionActive(false); 
+    } else if (appUser && appUser.id.startsWith('guest_')) { 
       setGuestSessionActive(true);
-    } else { // No Firebase user and appUser is not guest (or null), set guest session false
+    } else { 
       setGuestSessionActive(false);
     }
   }, [authUser, appUser]);
 
 
-  if (authLoading || (!appUser && !guestSessionActive)) { 
-    // console.log("AppPageLogic: Auth loading or appUser not yet initialized...");
+  if (authLoading || (!appUser && !guestSessionActive && !authUser)) { 
     return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
-        <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" />
+      <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4" role="alert" aria-live="polite">
+        <Loader2 className="h-16 w-16 text-accent animate-spin mb-4" aria-hidden="true" />
         <h1 className="text-3xl font-bold text-primary mb-2">Vibe Check</h1>
         <p className="text-muted-foreground">Warming up the good vibes... ✨</p>
       </div>
     );
   }
   
-  // If there is an authenticated Firebase user OR a guest session is active and appUser is a guest user
   if (authUser || (guestSessionActive && appUser?.id.startsWith('guest_'))) {
-    // console.log("AppPageLogic: AuthUser exists or guest session active. Rendering MainAppInterface.");
      return <MainAppInterface />;
   }
   
-  // console.log("AppPageLogic: No Firebase authUser and guest session not active. Showing login/guest choice page.");
   return (
     <div className="flex flex-col justify-center items-center min-h-screen bg-background text-foreground p-4">
       <div className="text-center space-y-6 w-full max-w-md p-8 bg-card shadow-xl rounded-2xl border border-border">
-          <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" />
+          <SparklesIcon className="h-16 w-16 text-accent mx-auto animate-pulse" aria-hidden="true" />
           <h1 className="text-4xl font-extrabold text-primary drop-shadow-md">Welcome to Vibe Check!</h1>
           <p className="text-lg text-muted-foreground">
               Your personal space to track moods, smash quests, and ride the good vibes.
@@ -594,7 +600,7 @@ function AppPageLogic() {
           <FirebaseUIWidget />
 
           <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
               <span className="w-full border-t border-border" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
@@ -604,8 +610,8 @@ function AppPageLogic() {
             </div>
           </div>
 
-          <Button onClick={handleGuestSignIn} variant="outline" className="w-full text-lg py-3 shadow-md hover:shadow-lg">
-              <UserIcon className="mr-2 h-5 w-5" /> Continue as Guest
+          <Button onClick={handleGuestSignIn} variant="outline" className="w-full text-lg py-3 shadow-md hover:shadow-lg" aria-label="Continue as Guest">
+              <UserIcon className="mr-2 h-5 w-5" aria-hidden="true" /> Continue as Guest
           </Button>
 
             <p className="text-xs text-muted-foreground mt-6">

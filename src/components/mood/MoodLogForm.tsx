@@ -30,8 +30,7 @@ import {
 } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-// Removed MoodLogsProvider, useMoodLogs from here, as it should be provided higher up
-// and MoodLogForm should consume it via useMoodLogs directly or get addMoodLog via props
+
 
 const moodLogSchema = z.object({
   date: z.date({
@@ -121,23 +120,25 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           name="date"
           render={({ field }) => (
             <FormItem className="flex flex-col">
-              <FormLabel className="font-semibold text-primary">Date Check 🗓️</FormLabel>
+              <FormLabel htmlFor="date-picker-button" className="font-semibold text-primary">Date Check 🗓️</FormLabel>
               <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                 <PopoverTrigger asChild>
                   <FormControl>
                     <Button
+                      id="date-picker-button"
                       variant={"outline"}
                       className={cn(
                         "w-full pl-3 text-left font-normal hover:bg-accent/10 shadow-sm border-border focus:ring-2 focus:ring-primary",
                         !field.value && "text-muted-foreground"
                       )}
+                      aria-label={`Selected date: ${field.value ? format(field.value, "PPP") : "Pick a date"}`}
                     >
                       {field.value ? (
                         format(field.value, "PPP")
                       ) : (
                         <span>Peep a date 👀</span> 
                       )}
-                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      <CalendarIcon className="ml-auto h-4 w-4 opacity-50" aria-hidden="true"/>
                     </Button>
                   </FormControl>
                 </PopoverTrigger>
@@ -173,7 +174,8 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
             <FormItem>
               <FormLabel className="font-semibold text-primary">Current Vibe Check? 🤔</FormLabel>
               <FormControl>
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3" role="radiogroup" aria-labelledby="mood-group-label">
+                  <span id="mood-group-label" className="sr-only">Select your current mood</span>
                   {moodOptions.map((mood) => {
                     const isSelected = field.value === mood;
                     const moodColor = moodOptionColors[mood as Mood] || "bg-gray-300 hover:bg-gray-400";
@@ -187,15 +189,17 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
                       >
                         <button
                           type="button"
+                          role="radio"
+                          aria-checked={isSelected}
                           onClick={() => handleMoodSelect(mood as Mood)}
                           className={cn(
                             "flex flex-col items-center justify-center p-3 rounded-lg shadow-md transition-all duration-200 ease-in-out w-full aspect-square text-white font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary",
                             moodColor,
                             isSelected ? "ring-4 ring-accent ring-offset-background shadow-xl scale-105" : "hover:shadow-lg"
                           )}
-                          aria-pressed={isSelected}
+                          aria-label={mood}
                         >
-                          <span className="text-3xl sm:text-4xl">{emoji}</span>
+                          <span className="text-3xl sm:text-4xl" aria-hidden="true">{emoji}</span>
                           <span className="text-xs sm:text-sm mt-1 truncate">{mood}</span>
                         </button>
                       </motion.div>
@@ -217,9 +221,10 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           name="activities"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="font-semibold text-primary">Activity Recap 📝</FormLabel> 
+              <FormLabel htmlFor="activities-input" className="font-semibold text-primary">Activity Recap 📝</FormLabel> 
               <FormControl>
                 <Textarea
+                  id="activities-input"
                   placeholder="e.g., Chilled with the squad, aced that test, gaming glow-up" 
                   className="focus:bg-background shadow-sm border-border focus:ring-2 focus:ring-primary min-h-[100px]"
                   {...field}
@@ -238,9 +243,10 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           name="notes"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="font-semibold text-primary">Extra Tea? (Low key optional 🍵)</FormLabel> 
+              <FormLabel htmlFor="notes-input" className="font-semibold text-primary">Extra Tea? (Low key optional 🍵)</FormLabel> 
               <FormControl>
                 <Textarea
+                  id="notes-input"
                   placeholder="Spill any extra deets or thoughts here..." 
                   className="focus:bg-background shadow-sm border-border focus:ring-2 focus:ring-primary min-h-[100px]"
                   {...field}
@@ -251,11 +257,10 @@ export function MoodLogForm({ onLogMood, existingDates }: MoodLogFormProps) {
           )}
         />
         <Button type="submit" className="w-full font-bold text-lg py-3 bg-gradient-to-r from-primary to-accent text-primary-foreground hover:from-primary/90 hover:to-accent/90 shadow-lg hover:shadow-xl transition-all transform hover:scale-105 active:scale-95">
-          <Wand2 className="mr-2 h-5 w-5" />
+          <Wand2 className="mr-2 h-5 w-5" aria-hidden="true"/>
           Log That Vibe! 🚀
         </Button>
       </form>
     </Form>
   );
 }
-

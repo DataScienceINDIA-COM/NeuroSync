@@ -1,16 +1,25 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import type { Content } from "@/types/content";
 import { Button } from "@/components/ui/button";
-import ContentService from "@/components/content/ContentService";
+import ContentService from "@/services/ContentService";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BookOpen, PlayCircle, ExternalLink } from "lucide-react";
+import { getRecommendedContent } from "@/ai/flows/recommended-content";
+import type { RecommendedContentOutput } from "@/ai/flows/recommended-content";
+import { useUser } from "@/contexts/UserContext"; 
+import { useMoodLogs } from "@/contexts/MoodLogsContext"; 
+
 
 export default function ContentDisplay() {
   const [contentList, setContentList] = useState<Content[]>([]);
   const [isClient, setIsClient] = useState(false);
   const [contentService, setContentService] = useState<ContentService | null>(null);
+  const [recommendedContent, setRecommendedContent] = useState<RecommendedContentOutput | null>(null);
+  const { user } = useUser(); 
+  const { moodLogs } = useMoodLogs(); 
 
   useEffect(() => {
     setIsClient(true);
@@ -23,63 +32,95 @@ export default function ContentDisplay() {
     }
   }, [contentService]);
 
+  
+  useEffect(() => {
+    if (isClient && user && moodLogs && moodLogs.length > 0) { // Ensure moodLogs is not empty
+      const fetchRecommendedContent = async () => {
+        try {
+          const result = await getRecommendedContent({
+            moodLogs: moodLogs,
+            hormoneLevels: user.hormoneLevels,
+            // Ensure user.tasks exists before mapping. Provide empty array if not.
+            activities: user.tasks?.map(task => task.name) || [], 
+          });
+          setRecommendedContent(result);
+        } catch (error) {
+          console.error("Failed to get recommended content:", error);
+          setRecommendedContent({ recommendations: ["10-Minute Guided Meditation for Stress Relief"] });
+        }
+      };
+      fetchRecommendedContent();
+    } else if (isClient && contentList.length > 0 && (!user || !moodLogs || moodLogs.length === 0)) {
+        // Fallback: if no user/mood data, show some default content or all content
+        // For now, we'll just let filteredContentList show all contentList items if recommendations are null
+    }
+  }, [isClient, user, moodLogs, contentList.length]); // Added contentList.length to re-evaluate if it loads after initial empty state
+
   if (!isClient || !contentService) {
     return (
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PlayCircle className="h-6 w-6 text-accent" />
+          <CardTitle id="content-loading-title" className="flex items-center gap-2">
+            <PlayCircle className="h-6 w-6 text-accent" aria-hidden="true" />
             Content Drops 🎬
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-center py-10">Loading fresh content picks... It's gonna be a vibe! ✨</p> {/* GenZ vibe */}
+        <CardContent role="alert" aria-busy="true" aria-labelledby="content-loading-title">
+          <p className="text-muted-foreground text-center py-10">Loading fresh content picks... It's gonna be a vibe! ✨</p> 
         </CardContent>
       </Card>
     );
   }
 
+  
+  const filteredContentList = recommendedContent?.recommendations && recommendedContent.recommendations.length > 0
+    ? contentList.filter(content => recommendedContent.recommendations.includes(content.title))
+    : contentList; // Show all if no recommendations or recommendations are empty
+
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <PlayCircle className="h-6 w-6 text-accent" />
+        <CardTitle id="content-title" className="flex items-center gap-2">
+          <PlayCircle className="h-6 w-6 text-accent" aria-hidden="true" />
            Curated Content Drops 💅
         </CardTitle>
-        <CardDescription>Handpicked vids, reads, and listens to boost your vibe. Low key, it's fire. 🔥</CardDescription> {/* GenZ vibe */}
+        <CardDescription>Handpicked vids, reads, and listens to boost your vibe. Low key, it's fire. 🔥</CardDescription> 
       </CardHeader>
-      <CardContent className="space-y-4">
-      {contentList.length === 0 ? (
-         <p className="text-muted-foreground text-center py-10">Nothin' new here yet, fam. Peep back later for some fire content! Bet. 😉</p> /* GenZ vibe */
+      <CardContent>
+      {filteredContentList.length === 0 ? (
+         <p className="text-muted-foreground text-center py-10">Nothin' new here yet, fam. Peep back later for some fire content! Bet. 😉</p> 
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {contentList.map((content) => (
-            <Card key={content.id} className="p-4 rounded-xl shadow-md bg-card/90 hover:shadow-lg transition-shadow border-border/70 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {content.type === 'video' && <PlayCircle className="h-5 w-5 text-primary"/>}
-                  {content.type === 'article' && <BookOpen className="h-5 w-5 text-primary"/>}
-                  {content.type === 'podcast' && <PlayCircle className="h-5 w-5 text-primary"/> /* Could use Headphones icon */}
-                  <h3 className="font-semibold text-lg text-primary-foreground">{content.title}</h3>
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredContentList.map((content) => (
+            <li key={content.id}>
+              <Card className="p-4 rounded-xl shadow-md bg-card/90 hover:shadow-lg transition-shadow border-border/70 flex flex-col justify-between h-full">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    {content.type === 'video' && <PlayCircle className="h-5 w-5 text-primary" aria-hidden="true"/>}
+                    {content.type === 'article' && <BookOpen className="h-5 w-5 text-primary" aria-hidden="true"/>}
+                    {content.type === 'podcast' && <PlayCircle className="h-5 w-5 text-primary" aria-hidden="true"/>}
+                    <h3 className="font-semibold text-lg text-primary-foreground">{content.title}</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground capitalize mb-1">{content.type}</p>
+                  <p className="text-foreground text-sm mt-1 mb-2">{content.description}</p>
+                  {content.hormones && content.hormones.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Good for: <span className="font-medium capitalize">{content.hormones.join(', ')}</span>
+                    </p>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground capitalize mb-1">{content.type}</p>
-                <p className="text-foreground text-sm mt-1 mb-2">{content.description}</p>
-                {content.hormones && content.hormones.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Good for: <span className="font-medium capitalize">{content.hormones.join(', ')}</span>
-                  </p>
-                )}
-              </div>
-              <Button 
-                variant="link" 
-                className="mt-3 p-0 h-auto text-accent hover:text-accent/80 self-start" 
-                onClick={() => window.open(content.url, "_blank")}
-              >
-                Check it Out, Bestie! <ExternalLink className="ml-1 h-4 w-4"/> {/* GenZ vibe */}
-              </Button>
-            </Card>
+                <Button 
+                  variant="link" 
+                  className="mt-3 p-0 h-auto text-accent hover:text-accent/80 self-start" 
+                  onClick={() => window.open(content.url, "_blank")}
+                  aria-label={`Open content: ${content.title} in a new tab`}
+                >
+                  Check it Out, Bestie! <ExternalLink className="ml-1 h-4 w-4" aria-hidden="true"/> 
+                </Button>
+              </Card>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
       </CardContent>
     </Card>

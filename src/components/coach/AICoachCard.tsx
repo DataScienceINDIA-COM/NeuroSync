@@ -23,21 +23,21 @@ export function AICoachCard({ user, nudge }: AICoachCardProps) {
 
 
   return (
-    <Card className="shadow-lg border-accent/50 rounded-xl overflow-hidden bg-gradient-to-tr from-accent/10 to-primary/10">
+    <Card className="shadow-lg border-accent/50 rounded-xl overflow-hidden bg-gradient-to-tr from-accent/10 to-primary/10" aria-labelledby="coach-card-title">
       <CardHeader className="p-4">
         <div className="flex items-center gap-3">
           <Avatar className="h-10 w-10 border-2 border-accent">
             {coachAvatarUrl ? (
-              <AvatarImage src={coachAvatarUrl} alt={`${coachName} Avatar`} data-ai-hint="friendly robot" />
+              <AvatarImage src={coachAvatarUrl} alt={`${coachName} avatar`} data-ai-hint="friendly robot" />
             ) : (
-              <AvatarImage src={`https://picsum.photos/seed/aibot/100/100`} alt="AI Coach Avatar" data-ai-hint="robot face" /> 
+              <AvatarImage src={`https://picsum.photos/seed/aibot/100/100`} alt={`${coachName} placeholder avatar`} data-ai-hint="robot face" /> 
             )}
             <AvatarFallback className="bg-accent text-accent-foreground">
               {fallbackInitials}
             </AvatarFallback>
           </Avatar>
           <div>
-            <CardTitle className="text-lg font-bold text-accent drop-shadow-sm">
+            <CardTitle id="coach-card-title" className="text-lg font-bold text-accent drop-shadow-sm">
               {coachName} Says...
             </CardTitle>
             <CardDescription className="text-xs text-muted-foreground italic">
