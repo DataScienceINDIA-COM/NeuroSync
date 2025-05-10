@@ -35,12 +35,22 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
     setInsights(null);
 
     try {
+      // Ensure activities are always an array for the flow input
       const formattedLogs = moodLogs.map(log => ({
         ...log,
-        activities: Array.isArray(log.activities) ? log.activities : (typeof log.activities === 'string' ? log.activities.split(',').map(s => s.trim()) : []),
+        activities: Array.isArray(log.activities) ? log.activities : (typeof log.activities === 'string' ? log.activities.split(',').map(s => s.trim()).filter(s => s) : []),
       })) as PersonalizedInsightsInput['moodLogs'];
+      
+      // Assuming user context or a way to get hormone levels is available here
+      // For now, providing mock hormone levels. In a real app, this would come from user state.
+      const mockHormoneLevels = { dopamine: 60, adrenaline: 40, cortisol: 50, serotonin: 70 };
 
-      const result = await getPersonalizedInsights({ moodLogs: formattedLogs });
+
+      const result = await getPersonalizedInsights({ 
+        moodLogs: formattedLogs,
+        hormoneLevels: mockHormoneLevels // Replace with actual user.hormoneLevels
+      });
+
       setInsights(result);
       if (result.insights.length === 0) {
         toast({
@@ -48,12 +58,13 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
           description: "AI's still thinking... or maybe your vibes are too unique! Keep logging, bestie!", 
         });
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error fetching personalized insights:", e);
-      setError("Oof, AI had a main character moment. Try again in a bit, fam?"); 
+      const errorMessage = e.message || "Oof, AI had a main character moment. Try again in a bit, fam?";
+      setError(errorMessage); 
       toast({
         title: "Major Glitch Alert! 😱", 
-        description: "Couldn't get your vibe report. That's a bit sus. Maybe try again?", 
+        description: `Couldn't get your vibe report: ${errorMessage}`, 
         variant: "destructive",
       });
     } finally {
@@ -148,4 +159,3 @@ export function PersonalizedInsights({ moodLogs }: PersonalizedInsightsProps) {
     </Card>
   );
 }
-

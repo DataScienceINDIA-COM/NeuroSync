@@ -4,11 +4,11 @@
 import { useEffect, useState } from "react";
 import type { Content } from "@/types/content";
 import { Button } from "@/components/ui/button";
-import ContentService from "@/components/content/ContentService";
+import ContentService from "@/services/ContentService";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BookOpen, PlayCircle, ExternalLink } from "lucide-react";
-import { getRecommendedContent } from "@/ai/flows/recommended-content";
-import type { RecommendedContentOutput } from "@/ai/flows/recommended-content";
+import { getRecommendedContent } from "../../../ai/flows/recommended-content"; // Changed from alias
+import type { RecommendedContentOutput } from "../../../ai/flows/recommended-content"; // Changed from alias
 import { useUser } from "@/contexts/UserContext"; 
 import { useMoodLogs } from "@/contexts/MoodLogsContext"; 
 
@@ -34,13 +34,12 @@ export default function ContentDisplay() {
 
   
   useEffect(() => {
-    if (isClient && user && moodLogs && moodLogs.length > 0) { // Ensure moodLogs is not empty
+    if (isClient && user && moodLogs && moodLogs.length > 0) { 
       const fetchRecommendedContent = async () => {
         try {
           const result = await getRecommendedContent({
             moodLogs: moodLogs,
             hormoneLevels: user.hormoneLevels,
-            // Ensure user.tasks exists before mapping. Provide empty array if not.
             activities: user.tasks?.map(task => task.name) || [], 
           });
           setRecommendedContent(result);
@@ -51,10 +50,8 @@ export default function ContentDisplay() {
       };
       fetchRecommendedContent();
     } else if (isClient && contentList.length > 0 && (!user || !moodLogs || moodLogs.length === 0)) {
-        // Fallback: if no user/mood data, show some default content or all content
-        // For now, we'll just let filteredContentList show all contentList items if recommendations are null
     }
-  }, [isClient, user, moodLogs, contentList.length]); // Added contentList.length to re-evaluate if it loads after initial empty state
+  }, [isClient, user, moodLogs, contentList.length]); 
 
   if (!isClient || !contentService) {
     return (
@@ -75,7 +72,7 @@ export default function ContentDisplay() {
   
   const filteredContentList = recommendedContent?.recommendations && recommendedContent.recommendations.length > 0
     ? contentList.filter(content => recommendedContent.recommendations.includes(content.title))
-    : contentList; // Show all if no recommendations or recommendations are empty
+    : contentList; 
 
   return (
     <Card className="shadow-lg" aria-labelledby="content-title">
@@ -126,4 +123,3 @@ export default function ContentDisplay() {
     </Card>
   );
 }
-
