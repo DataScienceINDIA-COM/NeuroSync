@@ -20,8 +20,7 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
 
   if (!userId || userId.startsWith('guest_')) {
     // For guest users, onboarding status is typically client-side or not persisted long-term.
-    // For now, we'll say it's successful for guests without a DB write.
-    console.log(`Onboarding completed for guest user ${userId} (client-side).`);
+    console.log(`Analytics Event: Onboarding Completed for guest user ${userId} (Server Action - Client Side Persistence)`);
     return { success: true, message: 'Guest onboarding completed (client-side).' };
   }
 
@@ -34,6 +33,8 @@ export async function completeOnboardingAction(userId: string): Promise<{ succes
       { merge: true }
     );
     console.log(`Onboarding completed and marked in Firestore for user ${userId}`);
+    // Analytics: Track onboarding completion (server-side)
+    console.log(`Analytics Event: Onboarding Completed for user ${userId} (Server Action - Firestore Persistence)`);
     return { success: true };
   } catch (error) {
     console.error('Error marking onboarding as completed in Firestore:', error);

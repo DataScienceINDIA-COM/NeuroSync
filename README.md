@@ -115,6 +115,7 @@ This section is for AI agents to log their activities and insights.
     - Implemented server-side actions (`src/actions/user-actions.ts`: `completeOnboardingAction`, `getUserOnboardingStatusAction`) to persist and retrieve user onboarding status using Firestore. This ensures status is synced across devices.
     - Updated `src/contexts/AuthContext.tsx` to fetch and set the authoritative onboarding status from Firestore for registered users upon login.
     - Modified `src/app/page.tsx` (within `MainAppInterface` and `AppPageLogic`) to correctly display the onboarding dialog based on the fetched status.
+    - **Analytics Conceptualization:** Added console log placeholders in `OnboardingDialog.tsx` (client-side) and `user-actions.ts` (server-side) to indicate where analytics events for onboarding completion/skip would be tracked. Full integration with an analytics platform (e.g., Mixpanel, Firebase Analytics) is pending.
 - **FirebaseUI Integration:**
     - Ensured `firebaseui.css` is imported in `src/app/globals.css`.
     - Verified and updated `FirebaseUIWidget.tsx` for robust Google Sign-In and Email/Password authentication.
@@ -153,6 +154,7 @@ This section is for AI agents to log their activities and insights.
 - **Avatar Description Validation:** Avatar descriptions are validated by an AI flow before image generation to improve quality and appropriateness.
 - **Integration Service:** `IntegrationService` will store integration details (tokens, status) in localStorage, scoped by `userId`. Real OAuth flows are a future enhancement.
 - **Real-time Notifications:** FCM is used for task completions, AI coach nudges, and important community updates.
+- **Onboarding Analytics:** Placeholder logs added for tracking onboarding completion/skip events. Full integration with an analytics platform is a future step.
 
 ### Issues & Troubleshooting
 
@@ -203,6 +205,7 @@ This roadmap outlines the key phases and steps for the development of the NeuroS
 - [x] **Task Personalization V1:** AI-driven task suggestions (`taskSuggestionsFlow`).
 - [x] **AI Avatar Generation:** Users create personalized avatars (`generateAvatarFlow` with description validation).
 - [x] **Set up user profile for the agent:** Created `AICoachProfile` and `CommunityModeratorProfile`.
+- [x] **Improved Onboarding Experience:** Interactive dialog, server-side status persistence.
 
 ## Phase 3: Expansion and Community Building (Partially Started)
 - [ ] **Gamification Enhancements:** Streaks, badges.
@@ -214,6 +217,7 @@ This roadmap outlines the key phases and steps for the development of the NeuroS
 - [x] **Implement Real-time Notifications:** FCM for foreground/background.
 - [x] **Improve Accessibility:** Initial pass in UI components.
 - [x] **Improve Stability for Connections:** Error handling in flows and retries.
+- [ ] **Implement Analytics Tracking:** For key events like onboarding (conceptualized).
 
 ### Tool Usage
 
@@ -492,6 +496,8 @@ Objective: Enhance user experience and add new features.
         *   [x] Create interactive `OnboardingDialog.tsx`
         *   [x] Persist onboarding status in Firestore (`src/actions/user-actions.ts`)
     69. [ ] Code deployment
+    70. [ ] Implement Analytics Tracking (e.g., Mixpanel, Firebase Analytics for key events like onboarding completion, feature engagement) (Conceptualized)
+
 
 Phase 6: Advanced AI & Refinements (Steps 81-100)
 

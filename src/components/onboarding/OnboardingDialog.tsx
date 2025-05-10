@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 // Removed direct icon imports as they are now part of onboardingSteps data structure
-import { onboardingSteps } from '@/config/onboardingContent.tsx'; // Import steps from config
+import { onboardingSteps } from '@/config/onboardingContent'; // Import steps from config
+import type { OnboardingStep } from '@/config/onboardingContent';
 
 interface OnboardingDialogProps {
   isOpen: boolean;
@@ -18,15 +19,24 @@ export function OnboardingDialog({ isOpen, onComplete }: OnboardingDialogProps) 
     if (currentStep < onboardingSteps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
+      // Analytics: Track onboarding completion (client-side)
+      console.log('Analytics Event: Onboarding Tutorial Completed (Client)');
       onComplete();
     }
   };
 
   const handleSkip = () => {
+    // Analytics: Track onboarding skipped (client-side)
+    console.log(`Analytics Event: Onboarding Tutorial Skipped at step ${currentStep + 1} (Client)`);
     onComplete();
   };
 
   const step = onboardingSteps[currentStep];
+
+  if (!step) {
+    // Fallback or handle error if step is undefined (should not happen with correct logic)
+    return null; 
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleSkip(); }}>
