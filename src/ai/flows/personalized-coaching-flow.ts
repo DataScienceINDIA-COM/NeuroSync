@@ -1,5 +1,7 @@
+
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { AICoachProfile } from '@/config/agentProfiles'; // Import agent profile
 
 // Define the input schema for the personalized coaching flow
 const PersonalizedCoachingInputSchema = z.object({
@@ -20,14 +22,14 @@ const PersonalizedCoachingInputSchema = z.object({
     adrenaline: z.number().describe('Adrenaline level (0-100).'),
     cortisol: z.number().describe('Cortisol level (0-100).'),
     serotonin: z.number().describe('Serotonin level (0-100).'),
-  }).describe('The user's current hormone levels.'),
+  }).describe('The user\'s current hormone levels.'),
 });
 
 export type PersonalizedCoachingInput = z.infer<typeof PersonalizedCoachingInputSchema>;
 
 // Define the output schema for the personalized coaching flow
 const PersonalizedCoachingOutputSchema = z.object({
-  coachingMessage: z.string().describe('A personalized, empathetic, and motivational coaching message in a GenZ-friendly tone.'),
+  coachingMessage: z.string().describe('A personalized, empathetic, and motivational coaching message in a GenZ-friendly tone, consistent with VibeCoach Lexi\'s persona.'),
   suggestedAction: z.string().optional().describe('An optional simple, actionable suggestion for the user.'),
 });
 
@@ -43,8 +45,8 @@ export const personalizedCoachingFlow = ai.defineFlow(
   async (input) => {
     const { userName, moodLogs, tasks, streak, hormoneLevels } = input;
 
-    // Create a prompt for the AI model
-    const prompt = `You are VibeCoach, a personalized AI coaching assistant with a GenZ-friendly, empathetic, and motivational tone.
+    // Create a prompt for the AI model, incorporating the agent's persona
+    const prompt = `${AICoachProfile.personaPrompt}
     Your goal is to provide concise and supportive messages based on the user's data.
     Keep your messages positive, encouraging, and relatable to a young audience. Use GenZ slang naturally but avoid being overly forced.
     Analyze the provided user data and offer a coaching message and optionally a simple, actionable suggestion.
@@ -54,11 +56,9 @@ export const personalizedCoachingFlow = ai.defineFlow(
     - Streak: ${streak} days
     - Hormone Levels (0-100%): Dopamine: ${hormoneLevels.dopamine}%, Adrenaline: ${hormoneLevels.adrenaline}%, Cortisol: ${hormoneLevels.cortisol}%, Serotonin: ${hormoneLevels.serotonin}%
     - Recent Mood Logs:
-    ${moodLogs.length > 0 ? moodLogs.map(log => `- Date: ${log.date}, Mood: ${log.mood}, Activities: ${log.activities?.join(', ') || 'None'}, Notes: ${log.notes || 'None'}`).join('
-') : 'No recent mood logs.'}
+    ${moodLogs.length > 0 ? moodLogs.map(log => `- Date: ${log.date}, Mood: ${log.mood}, Activities: ${log.activities?.join(', ') || 'None'}, Notes: ${log.notes || 'None'}`).join('\n') : 'No recent mood logs.'}
     - Tasks:
-    ${tasks.length > 0 ? tasks.map(task => `- ${task.name} (Completed: ${task.isCompleted})`).join('
-') : 'No tasks listed.'}
+    ${tasks.length > 0 ? tasks.map(task => `- ${task.name} (Completed: ${task.isCompleted})`).join('\n') : 'No tasks listed.'}
 
     Generate a personalized coaching message and an optional suggested action based on this data.
     Format the output strictly as a JSON object matching the defined schema (coachingMessage: string, suggestedAction: string | undefined).
@@ -78,7 +78,7 @@ export const personalizedCoachingFlow = ai.defineFlow(
 
       if (finishReason === 'blocked') {
         return {
-          coachingMessage: `Hey ${userName}! VibeCoach is here! Keep shining, fam! ✨ Sometimes words get blocked, but your energy is still 💯.`,
+          coachingMessage: `Hey ${userName}! ${AICoachProfile.name} here! Keep shining, fam! ✨ Sometimes words get blocked, but your energy is still 💯.`,
         };
       }
 
@@ -86,7 +86,7 @@ export const personalizedCoachingFlow = ai.defineFlow(
         console.error("AI coaching failed to produce an output.");
         // Fallback message
         return {
-          coachingMessage: `Yo ${userName}! VibeCoach checking in! Keep doing you, bestie! 🌱`,
+          coachingMessage: `Yo ${userName}! ${AICoachProfile.name} checking in! Keep doing you, bestie! 🌱`,
           suggestedAction: 'Take a deep breath.',
         };
       }
@@ -97,7 +97,8 @@ export const personalizedCoachingFlow = ai.defineFlow(
       console.error("Error generating personalized coaching message:", error);
       // Fallback message on error
       return {
-        coachingMessage: `Oof, VibeCoach had a moment! 😅 Keep your head up, ${userName}!`,n        suggestedAction: 'Maybe stretch it out?',
+        coachingMessage: `Oof, ${AICoachProfile.name} had a moment! 😅 Keep your head up, ${userName}!`,
+        suggestedAction: 'Maybe stretch it out?',
       };
     }
   }
