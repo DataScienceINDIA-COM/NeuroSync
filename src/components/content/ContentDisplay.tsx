@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import type { Content } from "@/types/content";
 import { Button } from "@/components/ui/button";
-import ContentService from "@/services/ContentService";
+import ContentService from "./ContentService"; // Corrected import path
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BookOpen, PlayCircle, ExternalLink, Loader2 } from "lucide-react";
 import { getRecommendedContent } from "@/ai/flows/recommended-content"; 
@@ -31,7 +31,7 @@ export default function ContentDisplay() {
 
   
   useEffect(() => {
-    if (isClient && user && moodLogs && moodLogs.length > 0) { 
+    if (isClient && user && moodLogs && moodLogs.length > 0 && contentService) { 
       const fetchRecommendedContent = async () => {
         setIsLoadingRecommendations(true);
         try {
@@ -143,3 +143,4 @@ export default function ContentDisplay() {
     </Card>
   );
 }
+

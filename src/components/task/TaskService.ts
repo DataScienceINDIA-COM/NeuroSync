@@ -6,7 +6,9 @@ import { generateId } from '@/lib/utils';
 // Corrected import: Removed SuggestedTask as it's not directly exported.
 // The structure of a suggestion is defined within TaskSuggestionsOutput.
 import { getTaskSuggestions, type TaskSuggestionsInput, type TaskSuggestionsOutput } from '@/ai/flows/task-suggestions'; 
-import { calculateRewardPoints, type CalculateRewardPointsInput } from '@/ai/tools/calculate-reward-points';
+// Import the server action instead of directly importing the tool
+import { calculateTaskRewardPointsAction } from '@/actions/task-actions';
+import type { CalculateRewardPointsInput } from '@/ai/tools/calculate-reward-points'; // Keep type import
 import type { MoodLog } from '@/types/mood'; 
 
 /**
@@ -136,7 +138,8 @@ class TaskService {
       hormoneLevels,
     };
     try {
-      const points = await calculateRewardPoints(rewardPointsInput);
+      // Call the server action instead of the direct AI tool function
+      const points = await calculateTaskRewardPointsAction(rewardPointsInput);
       return points;
     } catch (error) {
         console.error("Failed to calculate reward points with AI, returning default:", error);
