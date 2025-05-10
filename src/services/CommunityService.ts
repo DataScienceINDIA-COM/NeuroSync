@@ -128,6 +128,7 @@ class CommunityService {
       postStatus = 'rejected';
       moderationReason = moderationResult.reason || "Content deemed inappropriate by AI moderator.";
       console.warn(`Post by ${postData.userName} rejected: ${moderationReason}`);
+      // Throw an error that the UI can catch and display to the user via a toast
       throw new Error(`Post rejected: ${moderationReason}`);
     }
     
@@ -141,7 +142,7 @@ class CommunityService {
       shareCount: 0,
       edited: false,
       deleted: false,
-      status: postStatus,
+      status: postStatus, // Set status based on moderation
       moderationReason: moderationReason,
       reports: [],
     };
@@ -159,18 +160,21 @@ class CommunityService {
   public async updatePost(id: string, updatedMessage: string, userId: string): Promise<CommunityPost | null> {
     const postIndex = this.posts.findIndex((post) => post.id === id);
     if (postIndex > -1 && this.posts[postIndex].userId === userId) {
+      // Moderate the updated message
       const moderationResult = await moderateCommunityPost({ postContent: updatedMessage });
       if (!moderationResult.isAppropriate) {
-        this.posts[postIndex].status = 'rejected';
+        // Option 1: Reject update and keep original (or mark as rejected)
+        this.posts[postIndex].status = 'rejected'; // Or revert to original and notify user
         this.posts[postIndex].moderationReason = moderationResult.reason || "Edited content deemed inappropriate.";
         this.savePosts();
         throw new Error(`Update rejected: ${this.posts[postIndex].moderationReason}`);
+        // return null; // Or return the post with rejected status
       }
 
       this.posts[postIndex].message = updatedMessage;
-      this.posts[postIndex].timestamp = new Date().toISOString(); 
+      this.posts[postIndex].timestamp = new Date().toISOString(); // Update timestamp on edit
       this.posts[postIndex].edited = true;
-      this.posts[postIndex].status = 'approved'; 
+      this.posts[postIndex].status = 'approved'; // If moderation passed
       this.posts[postIndex].moderationReason = undefined;
       this.savePosts();
       return this.posts[postIndex];
@@ -190,7 +194,7 @@ class CommunityService {
 
   public async likePost(postId: string, userId: string): Promise<CommunityPost | null> {
     const post = this.getPostById(postId);
-    if (post && post.status === 'approved') { 
+    if (post && post.status === 'approved') { // Only allow liking approved posts
       const alreadyLiked = post.likedBy.includes(userId);
       if (alreadyLiked) {
         post.likes = Math.max(0, post.likes - 1);
@@ -207,7 +211,7 @@ class CommunityService {
 
   public async addCommentToPost(postId: string, commentData: Omit<Comment, 'id'>): Promise<CommunityPost | null> {
     const post = this.getPostById(postId);
-    if (post && post.status === 'approved') { 
+    if (post && post.status === 'approved') { // Only allow commenting on approved posts
       const moderationResult = await moderateCommunityPost({ postContent: commentData.comment });
       if (!moderationResult.isAppropriate) {
         console.warn(`Comment by ${commentData.userName} on post ${postId} rejected: ${moderationResult.reason}`);
@@ -226,11 +230,12 @@ class CommunityService {
     return null;
   }
 
+  // Simulates sharing a post. In a real app, this might involve API calls.
   public async sharePost(id: string): Promise<CommunityPost | null> {
     const post = this.getPostById(id);
-    if (post && post.status === 'approved') { 
+    if (post && post.status === 'approved') { // Only allow sharing approved posts
         post.shares = (post.shares ?? 0) + 1;
-        post.shareCount = post.shares; 
+        post.shareCount = post.shares; // Assuming shareCount is just an alias for shares
         this.savePosts();
         console.log(`Simulated share for post: ${post.message}`);
         return post;
@@ -238,6 +243,7 @@ class CommunityService {
     return null;
   }
 
+  // Method to report a post
   public async reportPost(postId: string, reportDetails: Omit<ReportDetail, 'reportId' | 'timestamp'>): Promise<CommunityPost | null> {
     const post = this.getPostById(postId);
     if (post) {
