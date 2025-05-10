@@ -15,13 +15,20 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
     const permission = await Notification.requestPermission();
     if (permission === "granted") {
       console.log("Notification permission granted.");
-      // TODO: Get FCM token here using `getToken`
+      
+      const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+      if (!vapidKey) {
+        console.error("VAPID key is missing. Ensure NEXT_PUBLIC_FIREBASE_VAPID_KEY is set in your environment variables.");
+        // Potentially inform the user, though this is a developer configuration issue.
+        return null; 
+      }
+
       const currentToken = await getToken(messagingInstance, {
-        vapidKey: process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY, // Your VAPID key from Firebase console
+        vapidKey: vapidKey, 
       });
+
       if (currentToken) {
         console.log("FCM Token:", currentToken);
-        // You would typically send this token to your server to store it against the user
         return currentToken;
       } else {
         console.log("No registration token available. Request permission to generate one.");
@@ -38,35 +45,26 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
 };
 
 // Handle incoming messages when the app is in the foreground
-export const onMessageListener = (): Promise<() => void> =>
+// Modified to accept a callback to handle the payload in the component
+export const onMessageListener = (callback: (payload: MessagePayload) => void): Promise<() => void> =>
   new Promise((resolve, reject) => {
     if (!messagingInstance) {
       console.log("Firebase Messaging is not supported in this browser or not initialized for onMessageListener.");
-      // Resolve with a no-op unsubscribe function if messaging is not available
       resolve(() => {}); 
       return;
     }
     
     const unsubscribe = onMessage(messagingInstance, (payload: MessagePayload) => {
-      console.log("Foreground message received. ", payload);
-      // You can display a toast, alert, or update UI here
-      // Example: new Notification(payload.notification.title, { body: payload.notification.body });
-      // This promise now resolves with the payload for immediate handling if needed,
-      // but typically onMessage is a listener, so its main job is to trigger side effects.
-      // For this setup, we are more interested in the unsubscribe function.
-      // To make it more flexible, we might want to pass a callback to onMessageListener.
-      // However, for now, we resolve the unsubscribe function.
+      console.log("Foreground message received by listener. ", payload);
+      callback(payload); // Execute the callback with the received payload
     });
     console.log("Foreground message listener attached.");
-    resolve(() => { console.log("Foreground message listener detached."); unsubscribe()}); // Resolve the promise with the unsubscribe function
+    resolve(() => { console.log("Foreground message listener detached."); unsubscribe()});
 
   }).catch(error => {
     console.error("Error setting up onMessage listener:", error);
-    // Ensure a promise is returned even on error, resolving to a no-op unsubscribe
     return () => {};
   });
 
 // Note: Background message handling is done via the firebase-messaging-sw.js file
 // in the public directory.
-
-    

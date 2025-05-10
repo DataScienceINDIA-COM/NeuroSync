@@ -19,6 +19,7 @@ To set up the development environment for this project, follow these steps:
         NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="YOUR_MESSAGING_SENDER_ID"
         NEXT_PUBLIC_FIREBASE_APP_ID="YOUR_APP_ID"
         NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="YOUR_MEASUREMENT_ID"
+        NEXT_PUBLIC_FIREBASE_VAPID_KEY="YOUR_FIREBASE_MESSAGING_VAPID_KEY" # For Web Push Notifications
         # Optional: If using Firebase Admin SDK with a service account file locally
         # GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/serviceAccountKey.json"
         # Optional: If your Firebase Cloud Functions are in a specific region
@@ -28,8 +29,8 @@ To set up the development environment for this project, follow these steps:
         1.  Go to the [Firebase Console](https://console.firebase.google.com/).
         2.  Select your project.
         3.  Click on the gear icon (Project settings) in the sidebar.
-        4.  Under the "General" tab, in the "Your apps" section, find your web app.
-        5.  The Firebase SDK snippet will contain these configuration values.
+        4.  Under the "General" tab, in the "Your apps" section, find your web app. The Firebase SDK snippet will contain most of these values.
+        5.  For `NEXT_PUBLIC_FIREBASE_VAPID_KEY`, go to Project settings > Cloud Messaging tab. Under "Web configuration", find "Web Push certificates" and copy the "Key pair".
 
 3.  **Enable Firebase Authentication Providers:**
     *   For FirebaseUI to work correctly with sign-in methods like Google Sign-In or Email/Password, you must enable them in your Firebase project. This is a common reason for `auth/configuration-not-found` or similar errors.
@@ -73,16 +74,20 @@ This section is for AI agents to log their activities and insights.
 - Implemented AI validation for avatar descriptions in `generateAvatarFlow`. This ensures descriptions are appropriate and clear before image generation.
 - Set up agent profiles in `src/config/agentProfiles.ts` for `AICoach` and `CommunityModerator`.
 - Implemented `IntegrationService` in `src/services/integrationService.ts` to manage connections with external wellness platforms. This service currently uses localStorage for persistence and simulates OAuth flows.
+- Implemented real-time notifications using Firebase Cloud Messaging (FCM). Added service worker for background notifications and enhanced foreground message handling with toasts.
 
 ### Decisions
 - Moderated content (posts/comments) will be rejected if deemed inappropriate by the AI. `CommunityService` now throws an error for rejected content, which `CommunityDisplay` handles by showing a toast.
 - `CommunityPost` type updated with `status` and `moderationReason`.
 - Avatar descriptions will be validated by `validateAvatarDescriptionPrompt` before generation. If invalid, an error with feedback is thrown.
 - `IntegrationService` will store integration details (tokens, status) in localStorage, scoped by `userId`.
+- Real-time notifications will be used for task completions, AI coach nudges, and important community updates.
 
 ### Issues
 - "Securing Cloud Functions" is a broad topic. The current implementation focuses on the security of Genkit flows as called from Next.js server actions. If specific, independently deployed Cloud Functions exist or are planned, their security (e.g., auth triggers, HTTP auth checks) needs to be addressed separately.
 - `IntegrationService` currently simulates OAuth and API calls. Real implementation will require actual OAuth libraries and API client logic for each platform. Secure token storage (beyond localStorage for production) should be considered.
+- FCM Service Worker (`public/firebase-messaging-sw.js`) requires manual configuration of Firebase project credentials.
+- `NEXT_PUBLIC_FIREBASE_VAPID_KEY` must be correctly set in `.env.local` for web push notifications to function.
 
 ### NeuroSync Project Roadmap
 
@@ -151,11 +156,12 @@ This phase aims to expand the application's features and foster a stronger commu
 - [ ] **User-Generated Content Moderation (Community-Assisted):** Allow trusted users to assist in content moderation.
     - [ ] Implement user reporting review workflow.
     - [ ] Introduce trusted user roles for moderation tasks.
-- [ ] **AI-Powered Content/Resource Suggestions:** Suggest articles, videos, or other resources based on user data and interests.
-    - [ ] Develop AI model for content recommendation.
-    - [ ] Integrate content suggestions into the dashboard.
+- [x] **AI-Powered Content/Resource Suggestions:** Suggest articles, videos, or other resources based on user data and interests.
+    - [x] Develop AI model for content recommendation.
+    - [x] Integrate content suggestions into the dashboard.
 - [x] **Secure Cloud Functions (Conceptual):** Ensure Genkit flows (which can be deployed as functions) are secure by design (server-side, input validation). Specific HTTP-triggered Cloud Functions would require explicit auth checks.
 - [x] **Create integration service:** Implemented `IntegrationService` for connecting to external wellness platforms.
+- [x] **Implement Real-time Notifications:** Setup Firebase Cloud Messaging for foreground and background notifications.
 
 ### Tool Usage
 
@@ -193,6 +199,7 @@ This detailed handover instruction provides a strong base for a new team to impr
             * NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: Firebase messaging sender ID.
             * NEXT_PUBLIC_FIREBASE_APP_ID: Firebase app ID.
             * NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: Firebase measurement ID.
+            * NEXT_PUBLIC_FIREBASE_VAPID_KEY: VAPID key for Web Push Notifications (FCM).
             * GOOGLE_APPLICATION_CREDENTIALS: Path to the Google Cloud service account key file.
             * Any other project-specific API keys or settings.
         * Security Note: Never commit .env.local to version control. It should be kept confidential. Use environment variables in production.
@@ -209,7 +216,7 @@ This detailed handover instruction provides a strong base for a new team to impr
  lib/: Utility functions and Firebase initialization.
  services/: Business logic services (e.g., TaskService, CommunityService, IntegrationService).
  types/: TypeScript type definitions.
- public/: Static assets such as images, fonts, and favicons.
+ public/: Static assets such as images, fonts, and favicons. Includes `firebase-messaging-sw.js` for FCM.
  .env.local: Environment-specific configuration variables (API keys, etc.).
  next.config.js: Next.js configuration file.
  tailwind.config.js: Tailwind CSS configuration file.
@@ -231,6 +238,10 @@ This detailed handover instruction provides a strong base for a new team to impr
     * Data Flows:
         * Realtime updates: Firestore/Realtime Database can provide real-time data updates.
         * Event-driven architecture: Cloud Functions can be triggered by database changes, authentication events, etc.
+    * Firebase Cloud Messaging (FCM):
+        * A service worker (`public/firebase-messaging-sw.js`) handles background notifications. It requires manual configuration with Firebase project details.
+        * Client-side code (`src/lib/firebase-messaging.ts` and `src/app/page.tsx`) handles permission requests, token management, and foreground notifications.
+        * Server-side actions (`src/actions/fcm-actions.ts`) send notifications using the Admin SDK.
 
 5. Genkit Setup:
     * AI Flows:
@@ -275,6 +286,7 @@ This detailed handover instruction provides a strong base for a new team to impr
 8. Quick Checks:
     * Ensure basic functionality works: Login, mood log, and data loading.
     * Test the Genkit set up, especially community post moderation.
+    * Test notification permissions and delivery (foreground and background).
 
 
 100-Step In-Depth Plan and Progress:
@@ -418,9 +430,9 @@ Objective: Implement community features and integrate with external wellness pla
         *   [x] AI validation
     52. [x] Create integration service
 
-    53. [ ] Improve accessibility
+    53. [x] Improve accessibility (Initial Pass)
     54. [ ] Bug fixes
-    55. [ ] Improve stability for connections
+    55. [x] Improve stability for connections (Error handling in flows, retries in page.tsx)
     56. [ ] Bug fixes
     57. [ ] Add Tooltip
 
@@ -438,10 +450,10 @@ Objective: Enhance user experience and add new features.
         *   [x] Send notifications on task completion
     64. [ ] Bug fixes
 
-    65. [ ] Test notification
+    65. [ ] Test notification (Thorough testing with various scenarios)
     66. [ ] Review data, data accuracy and AI perfomance
 
-    67. [ ] Improve accessibility
+    67. [ ] Improve accessibility (Comprehensive audit and fixes)
 
     68. [ ] Bug fixes
     69. [ ] Code deployment

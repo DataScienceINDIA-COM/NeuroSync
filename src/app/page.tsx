@@ -27,7 +27,7 @@ import { getAICoachNudge, useClientSideRandom } from "@/ai/coach";
 import { AICoachCard } from "@/components/coach/AICoachCard";
 import ContentDisplay from "@/components/content/ContentDisplay";
 import type { User as AppUser } from "@/types/user"; 
-import AvatarDisplay from "@/components/avatar/Avatar";
+import AvatarDisplay from "@/components/avatar/AvatarDisplay"; // Corrected import
 import { generateId } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Edit3, Brain, Zap, Wand2, ImagePlus, Loader2, Sparkles as SparklesIcon, Bell, BarChart3, ListChecks, LayoutDashboard, CalendarClock, PlusCircle, Lightbulb, User as UserIcon, LogIn, LogOut, Save, XCircle, ChevronDown, MessageCircle } from "lucide-react";
@@ -35,6 +35,7 @@ import { generateAvatar } from "@/ai/flows/generate-avatar-flow";
 import { useToast } from "@/hooks/use-toast";
 import { UserProvider as AppUserProvider, useUser as useAppUser } from "@/contexts/UserContext"; 
 import { requestNotificationPermission, onMessageListener } from '@/lib/firebase-messaging';
+import type { MessagePayload } from "firebase/messaging"; // Import MessagePayload
 import { storeUserFCMToken, sendNotificationToUser } from '@/actions/fcm-actions';
 import { AuthContextProvider, useAuth } from "@/contexts/AuthContext";
 import { signOutUser } from '@/services/authService'; 
@@ -63,36 +64,66 @@ function MainAppInterface() {
   const [editingName, setEditingName] = useState<string>("");
 
   const taskService = useMemo(() => {
-    if (!appUser) return null; // Guard against null appUser
-    return new TaskService(appUser); // Pass the appUser to TaskService constructor
-  }, [appUser]);
+    if (!appUser || !isClient) return null; 
+    return new TaskService(); 
+  }, [appUser, isClient]);
 
 
   useEffect(() => {
     setIsClient(true); 
   }, []);
 
-  // FCM Token Setup Effect
+  // FCM Token Setup and Foreground Message Listener Effect
   useEffect(() => {
     if (isClient && authUser && appUser && !appUser.id.startsWith('guest_') && setAppUser) { 
-      requestNotificationPermission().then(async token => {
-        if (token) {
-          const result = await storeUserFCMToken(authUser.uid, token); 
-          if (result.success) {
-             setAppUser(prevAppUser => prevAppUser ? ({ ...prevAppUser, fcmToken: token }) : null);
-            toast({ title: "Notifications Enabled! 🔔", description: "You'll get cool updates now. Low-key excited!" });
+      const setupNotifications = async () => {
+        try {
+          const token = await requestNotificationPermission();
+          if (token) {
+            const result = await storeUserFCMToken(authUser.uid, token); 
+            if (result.success) {
+               setAppUser(prevAppUser => prevAppUser ? ({ ...prevAppUser, fcmToken: token }) : null);
+              toast({ title: "Notifications On Fleek! 🔔", description: "You'll get cool updates now. Low-key excited!" });
+            } else {
+               toast({ title: "Bummer! 😥", description: `Failed to save notification settings: ${result.message}. Try again later, fam.`, variant: "destructive"});
+            }
           } else {
-             toast({ title: "Uh Oh! 😥", description: `Failed to save notification settings: ${result.message}. Try again later, fam.`, variant: "destructive"});
+             toast({ title: "No Stress! 😎", description: "Notifications are off. You can change this in browser settings anytime, no cap.", variant: "default"});
           }
-        } else {
-           toast({ title: "No Stress! 😎", description: "Notifications are off. You can change this in browser settings anytime, no cap.", variant: "default"});
+        } catch (err) {
+          console.error("Error setting up notification permissions:", err);
+          toast({ title: "Notification Setup Issue", description: "Could not set up notifications.", variant: "destructive" });
         }
-      });
+      };
+      setupNotifications();
 
-      const unsubscribePromise = onMessageListener().then(unsubscribeFn => unsubscribeFn)
-        .catch(err => { console.error('Failed to listen for foreground messages: ', err); return () => {}; });
+      // Handler for foreground messages
+      const handleForegroundMessage = (payload: MessagePayload) => {
+        console.log('Foreground message handled in page:', payload);
+        toast({
+          title: payload.notification?.title || "Vibe Check!",
+          description: payload.notification?.body || "You've got a new update!",
+          // You can add actions here based on payload.data if needed
+          // e.g., action: <ToastAction altText="View">View</ToastAction>
+        });
+      };
       
-      return () => { unsubscribePromise.then(fn => { if (typeof fn === 'function') fn(); }); };
+      // Subscribe to foreground messages
+      const unsubscribePromise = onMessageListener(handleForegroundMessage)
+        .then(unsubscribeFn => unsubscribeFn) // The promise resolves with the unsubscribe function
+        .catch(err => { 
+          console.error('Failed to set up foreground message listener: ', err); 
+          return () => {}; // Return a no-op function in case of error
+        });
+      
+      // Cleanup function to unsubscribe when component unmounts or dependencies change
+      return () => { 
+        unsubscribePromise.then(fn => { 
+          if (typeof fn === 'function') {
+            fn(); 
+          }
+        }); 
+      };
     }
   }, [isClient, authUser, appUser, setAppUser, toast]);
 
@@ -101,7 +132,7 @@ function MainAppInterface() {
   useEffect(() => {
     const fetchTaskSuggestions = async () => {
      if (isClient && appUser && appUser.moodLogs && appUser.tasks.length <= 5 && !appUser.id.startsWith('guest_') && taskService) {
-       const suggestedTaskDetailsOutput = await taskService.getSuggestedTasks(appUser.moodLogs, appUser.hormoneLevels, appUser.tasks);
+       const suggestedTaskDetailsOutput = await taskService.getSuggestedTasks(appUser.moodLogs, appUser.hormoneLevels, appUser.tasks.filter(t => t.isCompleted));
        if (suggestedTaskDetailsOutput && suggestedTaskDetailsOutput.suggestions) {
          const newTasksPromises = suggestedTaskDetailsOutput.suggestions.map(async (taskDetail) => {
             const points = await taskService.calculateRewardPointsForTask(taskDetail.description, appUser.moodLogs?.[0]?.mood || 'Neutral', appUser.hormoneLevels);
@@ -128,7 +159,7 @@ function MainAppInterface() {
       fetchTaskSuggestions();
    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isClient, taskService, appUser?.id, appUser?.moodLogs?.length, appUser?.tasks?.length]); 
+  }, [isClient, taskService, appUser?.id, appUser?.moodLogs?.length, appUser?.tasks?.length]); // taskService is stable if user doesn't change
 
 
   const handleFirebaseSignOutInternal = async () => {
@@ -151,22 +182,18 @@ function MainAppInterface() {
 
     if (completedTask) {
       const newNeuroPoints = appUser.neuroPoints + (completedTask.rewardPoints * (completedTask.hasNeuroBoost ? 10 : 1));
-      // Streak calculation is handled by TaskService, user object is updated there
-      // For this simplified setup, we'll directly manage streak here or ensure TaskService updates a shared user object.
-      // Assuming taskService.updateTask already handled streak on the user object instance it holds
-      // We'll rely on the user object instance from useAppUser() to be updated via setAppUser
       const currentDayOfYear = getDayOfYear(new Date());
       let newStreak = appUser.streak;
       let newLastCompletedDay = appUser.lastCompletedDay;
 
       if (appUser.lastCompletedDay !== currentDayOfYear) {
-        if (appUser.lastCompletedDay === currentDayOfYear -1 || (currentDayOfYear === 0 && appUser.lastCompletedDay === 365) /* handles year transition */) {
+        if (appUser.lastCompletedDay === currentDayOfYear -1 || (currentDayOfYear === 0 && appUser.lastCompletedDay === 365) ) {
           newStreak +=1;
         } else {
-          newStreak = 1; // Reset if not consecutive or first completion
+          newStreak = 1; 
         }
         newLastCompletedDay = currentDayOfYear;
-      } // If already completed a task today, streak remains same.
+      } 
       
       setAppUser(prevUser => {
         if (!prevUser) return null;
@@ -183,7 +210,7 @@ function MainAppInterface() {
         sendNotificationToUser(authUser.uid, { 
           title: "Quest Smashed! 🚀",
           body: `You just crushed '${completedTask.name}'! Keep that W energy!`,
-          data: { taskId: completedTask.id }
+          data: { taskId: completedTask.id, url: `/tasks/${completedTask.id}` } // Added URL for notification click
         }).then(response => {
           if (response.success) console.log("Task completion notification sent!");
           else console.error("Failed to send task completion notification:", response.message);
@@ -255,7 +282,7 @@ function MainAppInterface() {
     const result = await sendNotificationToUser(authUser.uid, { 
       title: "Vibe Check Test! 🧪",
       body: `Yo ${appUser.name}, this is a test notification! It's giving... works! 🎉`,
-      data: { test: "true" }
+      data: { test: "true", url: "/" } // Added URL for notification click
     });
     setIsSendingNotification(false);
     if (result.success) toast({ title: "Test Notification Sent! 📬", description: "Check your device, it should pop off!" });
@@ -371,7 +398,7 @@ function MainAppInterface() {
 
               </CardContent>
               <CardFooter className="p-5 bg-background border-t border-border/30 flex justify-center">
-                {authUser && appUser.fcmToken && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-label="Loading" /> : <Bell className="mr-2 h-4 w-4" aria-hidden="true" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
+                {authUser && appUser.fcmToken && !appUser.id.startsWith('guest_') && (<Button onClick={handleSendTestNotification} disabled={isSendingNotification} variant="outline" size="sm" className="border-accent/50 text-accent hover:bg-accent/10" > {isSendingNotification ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-label="Loading" /> : <Bell className="mr-2 h-4 w-4" aria-hidden="true" />}{isSendingNotification ? "Sending..." : "Test Push"}</Button> )}
               </CardFooter>
             </Card>
 
@@ -392,18 +419,18 @@ function MainAppInterface() {
                   onChange={(e) => setAvatarDescription(e.target.value)}
                   maxLength={200}
                   className="min-h-[100px] focus:bg-background shadow-inner"
-                  disabled={isGeneratingAvatar || appUser.id.startsWith('guest_')} 
+                  disabled={isGeneratingAvatar || (appUser && appUser.id.startsWith('guest_'))} 
                 />
                 <Button
                   onClick={handleGenerateAvatar}
                   aria-label="Generate AI avatar"
-                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || appUser.id.startsWith('guest_')}
+                  disabled={isGeneratingAvatar || avatarDescription.trim().length < 10 || avatarDescription.trim().length > 200 || (appUser && appUser.id.startsWith('guest_'))}
                   className="w-full shadow-md hover:shadow-lg active:shadow-inner transition-all"
                 >
                   {isGeneratingAvatar ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-label="Generating avatar" /> : <Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />}
-                  {isGeneratingAvatar ? "AI Makin' Magic..." : (appUser.id.startsWith('guest_') ? "Sign In to Generate" : "Generate My Vibe!")}
+                  {isGeneratingAvatar ? "AI Makin' Magic..." : (appUser && appUser.id.startsWith('guest_') ? "Sign In to Generate" : "Generate My Vibe!")}
                 </Button>
-                 {appUser.id.startsWith('guest_') && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
+                 {appUser && appUser.id.startsWith('guest_') && <p className="text-xs text-muted-foreground text-center">Sign in to create your custom AI avatar!</p>}
               </CardContent>
             </Card>
           </section>
@@ -558,7 +585,7 @@ function AppPageLogic() {
     if (auth.currentUser) { 
         await signOutUser(); 
     }
-    setAppUser(null); // Explicitly clear app user first
+    setAppUser(null); 
     setGuestSessionActive(true); 
     toast({ title: "Continuing as Guest! 👋", description: "You're now exploring as a guest. Some features may be limited."});
   };
